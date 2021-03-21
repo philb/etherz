@@ -1,0 +1,249 @@
+(ExpressProject "EtherZ"
+  (ProjectVersion "19981106")
+  (ProjectType "PCB")
+  (Folder "Design Resources"
+    (Folder "Library"
+      (File "..\orcad-libraries\schematic_symbols\master library.olb"
+        (Type "Schematic Library"))
+      (File ".\thgbmng5d1lbait.olb"
+        (Type "Schematic Library"))
+      (File ".\orcadcapturexml\2021-03-08_15-27-43.olb"
+        (Type "Schematic Library"))
+      (File ".\ul\orcadcapturexml\2021-03-09_12-00-32.olb"
+        (Type "Schematic Library"))
+      (File ".\ul\orcadcapturexml\2021-03-13_11-35-01.olb"
+        (Type "Schematic Library")))
+    (NoModify)
+    (File ".\etherzc.dsn"
+      (Type "Schematic Design"))
+    (BuildFileAddedOrDeleted "x")
+    (CompileFileAddedOrDeleted "x")
+    (Board_sim_option "VHDL_flow")
+    ("Create Allegro Netlist" "TRUE")
+    ("Allegro Netlist Directory" "allegro")
+    ("View Allegro Netlist Files" "FALSE")
+    ("Allegro Netlist Create DCF File" "FALSE")
+    ("Update Allegro Board" "TRUE")
+    ("Allegro Netlist Input Board File" "J:\etherz\ETHERZ.brd")
+    ("Allegro Netlist Output Board File" "J:\etherz\ETHERZ.brd")
+    ("Allegro Netlist Remove Etch" "FALSE")
+    ("Allegro Netlist Place Changed Component" "ALWAYS_REPLACE")
+    ("Allegro Netlist Open Board in Allegro" "ALLEGRO")
+    ("Allegro Setup Backup Versions" "3")
+    ("Allegro Setup Output Warnings" "TRUE")
+    ("Allegro Setup Ignore Constraints" "FALSE")
+    ("Allegro Setup Part Type Length" "31")
+    ("Allegro Netlist Combine Property String" "PCB Footprint")
+    ("Allegro Netlist Ignore Fixed Property" "FALSE")
+    ("Allegro Netlist User Defined Property" "FALSE")
+    (Netlist_TAB "0")
+    (OTHER_Part_Value "{Value}")
+    (OTHER_Netlist_File "ETHERZ.asc")
+    (OTHER_Netlist_File2 "ETHERZ.CMP")
+    (OTHER_View_Output "FALSE")
+    (OTHER_View_Output2 "FALSE")
+    (OTHER_Formatter "orPadspcb64.dll")
+    (OTHER_PCB_Footprint "{PCB Footprint}")
+    (OTHER_Switch0 "FALSE")
+    (OTHER_Switch1 "FALSE")
+    (OTHER_Switch2 "FALSE")
+    (OTHER_Switch3 "FALSE")
+    (OTHER_Switch4 "FALSE")
+    (OTHER_Switch5 "FALSE")
+    (OTHER_Switch6 "FALSE"))
+  (Folder "Outputs"
+    (File ".\allegro\pstxnet.dat"
+      (Type "Report")
+      (DisplayName "pstxnet.dat"))
+    (File ".\allegro\pstxprt.dat"
+      (Type "Report")
+      (DisplayName "pstxprt.dat"))
+    (File ".\allegro\pstchip.dat"
+      (Type "Report")
+      (DisplayName "pstchip.dat"))
+    (File ".\etherz.asc"
+      (Type "Report")))
+  (Folder "Referenced Projects")
+  (MPSSessionName "pb")
+  (PartMRUSelector
+    (ATSAM4S2CA-CU
+      (FullPartName "ATSAM4S2CA-CUB.Normal")
+      (LibraryName "J:\ETHERZ\UL\ORCADCAPTUREXML\2021-03-13_11-35-01.OLB")
+      (DeviceIndex "1"))
+    (CAP
+      (FullPartName "CAP.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\CAPACITORS.OLB")
+      (DeviceIndex "0"))
+    (RES
+      (FullPartName "RES.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\RESISTORS.OLB")
+      (DeviceIndex "0"))
+    (OFFPAGELEFT-R
+      (LibraryName "C:\CADENCE\SPB_17.2\TOOLS\CAPTURE\LIBRARY\CAPSYM.OLB")
+      (DeviceIndex "0"))
+    (TPS71710-SO5_0
+      (FullPartName "TPS71710-SO5_0.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (NMOS_SOT23
+      (FullPartName "NMOS_SOT23.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (IS25LQ020B
+      (FullPartName "IS25LQ020B.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (AT24C02
+      (FullPartName "AT24C02.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (VCC_BAR
+      (LibraryName "C:\CADENCE\SPB_17.2\TOOLS\CAPTURE\LIBRARY\CAPSYM.OLB")
+      (DeviceIndex "0"))
+    (GND
+      (LibraryName "C:\CADENCE\SPB_17.2\TOOLS\CAPTURE\LIBRARY\CAPSYM.OLB")
+      (DeviceIndex "0"))
+    (OFFPAGELEFT-L
+      (LibraryName "C:\CADENCE\SPB_17.2\TOOLS\CAPTURE\LIBRARY\CAPSYM.OLB")
+      (DeviceIndex "0"))
+    (FB
+      (FullPartName "FB.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (DIODE_SOT-23
+      (FullPartName "DIODE_SOT-23.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (SST39VF010-70-4I-NHE-T
+      (FullPartName "SST39VF010-70-4I-NHE-TB.Normal")
+      (LibraryName "J:\ETHERZ\UL\ORCADCAPTUREXML\2021-03-09_12-00-32.OLB")
+      (DeviceIndex "1"))
+    (iCE40HX1K-VQ100
+      (FullPartName "iCE40HX1K-VQ100A.Normal")
+      (LibraryName "Y:\ORCAD\LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (ATSAM4S2BA-AU
+      (FullPartName "ATSAM4S2BA-AUB.Normal")
+      (LibraryName "J:\ETHERZ\ORCADCAPTUREXML\2021-03-08_15-27-43.OLB")
+      (DeviceIndex "1"))
+    (THGBMNG5D1LBAIT
+      (FullPartName "THGBMNG5D1LBAIT.Normal")
+      (LibraryName "J:\ETHERZ\THGBMNG5D1LBAIT.OLB")
+      (DeviceIndex "0"))
+    (VCC
+      (LibraryName "C:\CADENCE\SPB_17.2\TOOLS\CAPTURE\LIBRARY\CAPSYM.OLB")
+      (DeviceIndex "0"))
+    (HDR_1X5_M
+      (FullPartName "HDR_1X5_M.Normal")
+      (LibraryName
+         "H:\GIT\ORCAD-LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0"))
+    (HDR_1X8_M
+      (FullPartName "HDR_1X8_M.Normal")
+      (LibraryName
+         "H:\GIT\ORCAD-LIBRARIES\SCHEMATIC_SYMBOLS\MASTER LIBRARY.OLB")
+      (DeviceIndex "0")))
+  (GlobalState
+    (FileView
+      (Path "Design Resources")
+      (Path "Design Resources" ".\etherzc.dsn")
+      (Path "Design Resources" ".\etherzc.dsn" "SCHEMATIC1")
+      (Path "Design Resources" "Library")
+      (Path "Outputs"))
+    (HierarchyView)
+    (Doc
+      (Type "COrCapturePMDoc")
+      (Frame
+        (Placement "44 2 3 -1 -1 -8 -31 0 325 0 380"))
+      (Tab 0))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 130 1176 130 503")
+        (Scroll "-14 0")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "ECONET"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 78 1124 78 451")
+        (Scroll "3092 2576")
+        (Zoom "400")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "ETHER"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 0 527 -8 -31 104 1150 104 477")
+        (Scroll "0 80")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "PODULE_HOST"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 182 1228 182 555")
+        (Scroll "0 997")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "EMMC"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 182 934 182 555")
+        (Scroll "0 91")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "POWER"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 30 782 226 599")
+        (Scroll "46 0")
+        (Zoom "106")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "FPGA"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 182 1228 182 555")
+        (Scroll "-14 0")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "FLASH"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 52 1098 52 425")
+        (Scroll "-14 0")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "MCU"))
+    (Doc
+      (Type "COrSchematicDoc")
+      (Frame
+        (Placement "44 0 1 -1 -1 -8 -31 78 1124 78 451")
+        (Scroll "-14 0")
+        (Zoom "100")
+        (Occurrence "/"))
+      (Path "J:\ETHERZ\ETHERZC.DSN")
+      (Schematic "SCHEMATIC1")
+      (Page "SERIAL")))
+  (ISPCBBASICLICENSE "false"))
