@@ -4,7 +4,7 @@
 
 # Version:            2020.12.27943
 
-# File Generated:     Mar 18 2021 16:41:40
+# File Generated:     Apr 24 2021 18:56:46
 
 # Family & Device:    iCE40HX1K
 
@@ -20,11 +20,12 @@ set_io_ff FLASH_A[16] -out OFF
 set_io_ff FLASH_A[17] -out OFF
 set_io_ff FLASH_A[18] -out OFF
 
-###IOSet List 42
+###IOSet List 48
 set_io A[10] 85 -io_std SB_LVCMOS
 set_io A[11] 83 -io_std SB_LVCMOS
 set_io A[12] 82 -io_std SB_LVCMOS
 set_io A[13] 81 -io_std SB_LVCMOS
+set_io A[9] 86 -io_std SB_LVCMOS
 set_io BL 51 -io_std SB_LVCMOS
 set_io D[0] 74 -io_std SB_LVCMOS
 set_io D[1] 73 -io_std SB_LVCMOS
@@ -32,6 +33,8 @@ set_io D[2] 72 -io_std SB_LVCMOS
 set_io D[3] 71 -io_std SB_LVCMOS
 set_io D[4] 69 -io_std SB_LVCMOS
 set_io D[5] 68 -io_std SB_LVCMOS
+set_io D[6] 66 -io_std SB_LVCMOS
+set_io D[7] 65 -io_std SB_LVCMOS
 set_io ETH_CMD 21 -io_std SB_LVCMOS
 set_io FIQ 63 -io_std SB_LVCMOS
 set_io FLASH_A[13] 40 -io_std SB_LVCMOS
@@ -50,17 +53,20 @@ set_io IRQ 60 -io_std SB_LVCMOS
 set_io SERIAL_DTR 1 -io_std SB_LVCMOS
 set_io SERIAL_RTS 59 -io_std SB_LVCMOS
 set_io SERIAL_TXD 26 -io_std SB_LVCMOS
+set_io nECONET_FIQ 78 -io_std SB_LVCMOS
 set_io nECONET_SEL 9 -io_std SB_LVCMOS
 set_io nETH_CS 25 -io_std SB_LVCMOS
 set_io nETH_IRQ 24 -io_std SB_LVCMOS
 set_io nETH_RE 19 -io_std SB_LVCMOS
 set_io nETH_WE 20 -io_std SB_LVCMOS
 set_io nFLASH_CE 8 -io_std SB_LVCMOS
+set_io nIOC_SEL 79 -io_std SB_LVCMOS
 set_io nIO_RESET 16 -io_std SB_LVCMOS
 set_io nMCU_IRQ 10 -io_std SB_LVCMOS
 set_io nMCU_RESET 12 -io_std SB_LVCMOS
 set_io nOE_ADDR 57 -io_std SB_LVCMOS
 set_io nOE_DATAIN 53 -io_std SB_LVCMOS
 set_io nOE_DATAOUT 52 -io_std SB_LVCMOS
+set_io nRE 99 -io_std SB_LVCMOS
 set_io nWE 80 -io_std SB_LVCMOS
 

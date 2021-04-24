@@ -2,10 +2,10 @@
 #-- Project file /home/pb/etherz/etherz/etherz_syn.prj
 #project files
 
-add_file -verilog -lib work "../bus/top.v" 
-add_file -verilog -lib work "../bus/decode.v" 
-add_file -verilog -lib work "../bus/fpl.v" 
-add_file -verilog -lib work "../bus/interrupts.v" 
+add_file -verilog -lib work "top.v" 
+add_file -verilog -lib work "interrupts.v" 
+add_file -verilog -lib work "fpl.v" 
+add_file -verilog -lib work "decode.v" 
 #implementation: "etherz_Implmnt"
 impl -add etherz_Implmnt -type fpga
 
