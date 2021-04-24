@@ -460,7 +460,7 @@ endif
 	$(Q)$(OBJCOPY) -O ihex $(flashflags-gnu-y)  $< $@
 
 # Create binary image from ELF output file.
-%.bin: $(target)
+$(patsubst %.elf,%.bin,$(target)): $(target)
 	@echo $(MSG_BINARY_IMAGE)
 	$(Q)$(OBJCOPY) -O binary $< $@
 
