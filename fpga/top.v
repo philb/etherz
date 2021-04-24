@@ -1,5 +1,5 @@
-module top(A, nWE, nIOC_SEL, nECONET_FIQ, REF8M, RnW, 
-	   D, SERIAL_CTS, IRQ, SERIAL_RTS, nOE_ADDR, SERIAL_RI, SERIAL_DCD, nOE_DATAIN, nOE_DATAOUT, BL, 
+module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
+	   D, SERIAL_CTS, IRQ, SERIAL_RTS, nOE_ADDR, SERIAL_RI, SERIAL_DCD, nOE_DATAIN, nOE_DATAOUT, BL,
 	   FIQ, nETH_CS, nETH_IRQ, ETH_CMD, nETH_WE, nETH_RE, RST, nIO_RESET, nMCU_RESET, nMCU_IRQ,
 	   nECONET_SEL, nFLASH_CE, IOGT, FPGA_DEBUG3, nMS1, SERIAL_DSR, SERIAL_DTR, FPGA_CLK, FPGA_SS2,
 	   FLASH_A, SERIAL_RXD, SERIAL_TXD, FPGA_CLK2, SERIAL_INVALID, FPGA_DEBUG1, FPGA_DEBUG2,
@@ -7,6 +7,7 @@ module top(A, nWE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
 
    input [13:2]   A;
    input 	  nWE;
+   input 	  nRE;
    input 	  nIOC_SEL;
    input 	  nECONET_FIQ;
    input 	  REF8M;
@@ -54,22 +55,30 @@ module top(A, nWE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
 
    // main clock
    wire 	  clk;
-   assign clk = FPGA_CLK;   
-   
+   assign clk = FPGA_CLK;
+
    wire 	  rom_cs, econet_cs, ethernet_cs, ide_cs, interrupt_cs, fpl_cs, uart_cs;
-   wire 	  ide_irq, uart_tx_irq, uart_rx_irq;	  
+   wire 	  ide_irq, uart_tx_irq, uart_rx_irq;
 
    decode decode_(A, rom_cs, econet_cs, ethernet_cs, ide_cs, interrupt_cs, fpl_cs, uart_cs);
-   
+
    // externally visible chip selects
-   assign nFLASH_CE = !(rom_cs && !IOC_SEL);
-   assign nECONET_SEL = !(econet_cs && !IOC_SEL);
-   assign nETH_CS = !(ethernet_cs && !IOC_SEL);
+   assign nFLASH_CE = 1;  //!(rom_cs && !nIOC_SEL);
+   assign nECONET_SEL = !(econet_cs && !nIOC_SEL);
+   assign nETH_CS = !(ethernet_cs && !nIOC_SEL);
    assign ETH_CMD = A[9];
    assign nETH_RE = nRE;
    assign nETH_WE = nWE;
-   
+
+   assign D[7:0] = (rom_cs && !nIOC_SEL) ? 8'h08 : 8'bzzzzzzzz;
+
    fpl fpl_(fpl_cs && IOC_SEL, nWE, D, FLASH_A, clk);
    interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && IOC_SEL, !nRE, !nWE);
-           
+
+   assign nIO_RESET = 1'b1;
+
+   assign nOE_DATAIN = nIOC_SEL || nWE;
+   assign nOE_DATAOUT = nIOC_SEL || nRE;
+   assign nOE_ADDR = 1'b0;
+
 endmodule // top
