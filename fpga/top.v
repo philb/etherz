@@ -63,16 +63,14 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    decode decode_(A, rom_cs, econet_cs, ethernet_cs, ide_cs, interrupt_cs, fpl_cs, uart_cs);
 
    // externally visible chip selects
-   assign nFLASH_CE = 1;  //!(rom_cs && !nIOC_SEL);
+   assign nFLASH_CE = !(rom_cs && !nIOC_SEL);
    assign nECONET_SEL = !(econet_cs && !nIOC_SEL);
    assign nETH_CS = !(ethernet_cs && !nIOC_SEL);
    assign ETH_CMD = A[9];
    assign nETH_RE = nRE;
    assign nETH_WE = nWE;
 
-   assign D[7:0] = (rom_cs && !nIOC_SEL) ? 8'h08 : 8'bzzzzzzzz;
-
-   fpl fpl_(fpl_cs && IOC_SEL, nWE, D, FLASH_A, clk);
+   fpl fpl_(fpl_cs && !nIOC_SEL, nWE, D[7:0], FLASH_A[18:13], clk);
    interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && IOC_SEL, !nRE, !nWE);
 
    assign nIO_RESET = 1'b1;

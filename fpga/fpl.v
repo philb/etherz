@@ -11,8 +11,8 @@ module fpl(cs, nwe, d, out, clk);
    
    always @(posedge clk)
      begin
-	if (!nwe)
-	  latch[18:13] <= d[5:0];	
+	if (cs && !nwe)
+	  latch[18:13] <= d[5:0];
      end   
 
 endmodule // fpl

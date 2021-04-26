@@ -7,14 +7,14 @@
 // 1   1   0   0    Flash page latch
 // 1   1   0   1    UART
 
-module decode(a, rom_cs, econet_cs, ethernet_cs, ide_cs, interrupt_cs, page_cs, uart_cs);
+module decode(a, rom_cs, econet_cs, ethernet_cs, ide_cs, interrupt_cs, fpl_cs, uart_cs);
    input [13:2] a;
    output 	rom_cs;
    output 	econet_cs;
    output 	ethernet_cs;
    output 	ide_cs;
    output 	interrupt_cs;
-   output 	page_cs;
+   output 	fpl_cs;
    output 	uart_cs;
 
    assign rom_cs = (a[13] == 1'b0);
