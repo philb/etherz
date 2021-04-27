@@ -69,6 +69,7 @@ CSRCS = \
        sam/drivers/hsmci/hsmci.c                          \
        sam/drivers/spi/spi.c			          \
        sam/drivers/pdc/pdc.c				  \
+       sam/drivers/wdt/wdt.c				  \
        sam/utils/cmsis/sam4s/source/templates/gcc/startup_sam4s.c \
        sam/utils/cmsis/sam4s/source/templates/system_sam4s.c \
        sam/utils/syscalls/gcc/syscalls.c \
@@ -99,6 +100,7 @@ INC_PATH = \
        sam/drivers/spi				          \
        sam/drivers/pdc					  \
        sam/drivers/hsmci				  \
+       sam/drivers/wdt					  \
        sam/utils                                          \
        sam/utils/cmsis/sam4s/include                      \
        sam/utils/cmsis/sam4s/source/templates             \

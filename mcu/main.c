@@ -5,6 +5,7 @@
 #include "ioport.h"
 #include "sd_mmc.h"
 #include "delay.h"
+#include "wdt.h"
 
 static uint8_t fpga_image[] = {
 #include "fpga_image.h"
@@ -41,11 +42,11 @@ static void load_fpga(void)
 	ioport_set_pin_dir(FPGA_CRESET_GPIO, IOPORT_DIR_OUTPUT);
 	ioport_enable_pin(FPGA_CRESET_GPIO);
 	ioport_set_pin_level(FPGA_CRESET_GPIO, IOPORT_PIN_LEVEL_LOW);
-	
+
 	ioport_set_pin_mode(FPGA_CDONE_GPIO, IOPORT_MODE_PULLUP);
 	ioport_set_pin_dir(FPGA_CDONE_GPIO, IOPORT_DIR_INPUT);
 	ioport_enable_pin(FPGA_CDONE_GPIO);
-	
+
 	ioport_set_pin_mode(FPGA_SS_GPIO, 0);
 	ioport_set_pin_dir(FPGA_SS_GPIO, IOPORT_DIR_OUTPUT);
 	ioport_enable_pin(FPGA_SS_GPIO);
@@ -59,7 +60,7 @@ static void load_fpga(void)
 	ioport_disable_pin(PIO_PA14_IDX);
 
 	Pdc *pdc = spi_get_pdc_base(SPI);
-	
+
 	pmc_enable_periph_clk(ID_SPI);
 
 	spi_disable(SPI);
@@ -84,18 +85,18 @@ static void load_fpga(void)
 	ioport_set_pin_level(FPGA_CRESET_GPIO, IOPORT_PIN_LEVEL_HIGH);
 
 	delay_ms(1);
-	
+
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = (uint32_t)&fpga_image[0];
 	pdc_spi_packet.ul_size = sizeof(fpga_image);
 	pdc_tx_init(pdc, &pdc_spi_packet, NULL);
-	
+
 	/* Enable the TX PDC transfer requests */
 	pdc_enable_transfer(pdc, PERIPH_PTCR_TXTEN);
 
 	/* Waiting transfer done*/
 	while((spi_read_status(SPI) & SPI_SR_ENDTX) == 0);
-	
+
 	/* Disable the RX and TX PDC transfer requests */
 	pdc_disable_transfer(pdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);
 
@@ -106,15 +107,22 @@ static void load_fpga(void)
 	pdc_spi_packet.ul_addr = (uint32_t)&fpga_image[0];
 	pdc_spi_packet.ul_size = 8;
 	pdc_tx_init(pdc, &pdc_spi_packet, NULL);
-	
+
 	/* Enable the TX PDC transfer requests */
 	pdc_enable_transfer(pdc, PERIPH_PTCR_TXTEN);
 
 	/* Waiting transfer done*/
 	while((spi_read_status(SPI) & SPI_SR_ENDTX) == 0);
-	
+
 	/* Disable the RX and TX PDC transfer requests */
 	pdc_disable_transfer(pdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);
+
+	// Enable clock to FPGA
+	ioport_set_pin_mode(PIO_PA6_IDX, IOPORT_MODE_MUX_B);
+	ioport_disable_pin(PIO_PA6_IDX);
+	pmc_disable_pck(0);
+	pmc_switch_pck_to_mainck(0, 0);
+	pmc_enable_pck(0);
 }
 
 static void setup_emmc(void)
@@ -131,11 +139,11 @@ static void setup_emmc(void)
 	ioport_disable_pin(PIO_PA30_IDX);
 	ioport_set_pin_mode(PIO_PA31_IDX, IOPORT_MODE_MUX_C);
 	ioport_disable_pin(PIO_PA31_IDX);
-	
+
 	sd_mmc_init();
 	sd_mmc_check(0);
 
-	printf("Capacity %dMB\n", sd_mmc_get_capacity(0) / 1024);
+	printf("eMMC %dMB\n", sd_mmc_get_capacity(0) / 1024);
 }
 
 static int debug_put(void volatile *x, char c)
@@ -147,13 +155,15 @@ static int debug_put(void volatile *x, char c)
 int main(void)
 {
 	ptr_put = debug_put;
-	
+
 	sysclk_init();
 	ioport_init();
 	debug_puts("Hello\n");
 	load_fpga();
 
 	setup_emmc();
+
+	wdt_disable(WDT);
 
 	for (;;)
 		;
