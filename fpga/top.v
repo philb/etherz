@@ -57,10 +57,10 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    wire 	  clk;
    assign clk = FPGA_CLK;
 
-   wire 	  rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs;
+   wire 	  rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs, interrupt_mask_cs;
    wire 	  ide_irq, uart_tx_irq, uart_rx_irq;
 
-   decode decode_(A, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs);
+   decode decode_(A, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs, interrupt_mask_cs);
 
    // externally visible chip selects
    assign nFLASH_CE = !(rom_cs && !nIOC_SEL);
