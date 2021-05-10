@@ -33,13 +33,13 @@ module decode(a, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, 
    output 	fpl_cs;
    output 	uart_cs;
 
-   assign rom_cs = (a[13] == 1'b0);
-   assign econet_cs = (a[13:10] == 4'b1000);
-   assign ethernet_cs = (a[13:10] == 4'b1110);
-   assign ide_cs = (a[13:10] == 4'b1001);
-   assign ide2_cs = (a[13:10] == 4'b1010);
-   assign interrupt_cs = (a[13:10] == 4'b1011);
-   assign fpl_cs = (a[13:10] == 4'b1100);
-   assign uart_cs = (a[13:10] == 4'b1110);   
+   assign rom_cs =            (a[13] == 1'b0);
+   assign econet_cs =         (a[13:10] == 4'b1000);
+   assign ide_cs =            (a[13:10] == 4'b1001);
+   assign ide2_cs =           (a[13:10] == 4'b1010);
+   assign interrupt_cs =      (a[13:10] == 4'b1011);
+   assign fpl_cs =            (a[13:10] == 4'b1100);
+   assign uart_cs =           (a[13:10] == 4'b1101);
+   assign ethernet_cs =       (a[13:10] == 4'b1110);
    
 endmodule // decode
