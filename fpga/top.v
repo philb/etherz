@@ -70,7 +70,7 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    assign nETH_RE = nRE;
    assign nETH_WE = nWE;
 
-   fpl fpl_(fpl_cs && !nIOC_SEL, nWE, D[7:0], FLASH_A[18:13], clk);
+   fpl fpl_(fpl_cs && !nIOC_SEL, nWE, D[7:0], FLASH_A[18:13], clk, !RST);
    interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && IOC_SEL, !nRE, !nWE);
 
    assign nIO_RESET = 1'b1;
