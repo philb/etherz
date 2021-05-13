@@ -4,7 +4,7 @@ Version=Lattice Semiconductor Corporation iCEcube - Release: 2020.12.27943 - Bui
 ProjectName=etherz
 Vendor=SiliconBlue
 Synthesis=synplify
-ProjectVFiles=top.v=work,interrupts.v=work,fpl.v=work,decode.v=work
+ProjectVFiles=top.v=work,interrupts.v=work,fpl.v=work,decode.v=work,ide.v
 ProjectCFiles=
 CurImplementation=etherz_Implmnt
 Implementations=etherz_Implmnt

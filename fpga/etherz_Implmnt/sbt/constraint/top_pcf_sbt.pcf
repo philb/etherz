@@ -4,7 +4,7 @@
 
 # Version:            2020.12.27943
 
-# File Generated:     Apr 24 2021 18:56:46
+# File Generated:     May 13 2021 10:42:11
 
 # Family & Device:    iCE40HX1K
 
@@ -20,11 +20,14 @@ set_io_ff FLASH_A[16] -out OFF
 set_io_ff FLASH_A[17] -out OFF
 set_io_ff FLASH_A[18] -out OFF
 
-###IOSet List 48
+###IOSet List 53
 set_io A[10] 85 -io_std SB_LVCMOS
 set_io A[11] 83 -io_std SB_LVCMOS
 set_io A[12] 82 -io_std SB_LVCMOS
 set_io A[13] 81 -io_std SB_LVCMOS
+set_io A[2] 97
+set_io A[3] 96
+set_io A[4] 95
 set_io A[9] 86 -io_std SB_LVCMOS
 set_io BL 51 -io_std SB_LVCMOS
 set_io D[0] 74 -io_std SB_LVCMOS
@@ -50,6 +53,8 @@ set_io FPGA_DEBUG3 4 -io_std SB_LVCMOS
 set_io FPGA_SDO 45 -io_std SB_LVCMOS
 set_io IOGT 7 -io_std SB_LVCMOS
 set_io IRQ 60 -io_std SB_LVCMOS
+set_io RST 18
+set_io RnW 90
 set_io SERIAL_DTR 1 -io_std SB_LVCMOS
 set_io SERIAL_RTS 59 -io_std SB_LVCMOS
 set_io SERIAL_TXD 26 -io_std SB_LVCMOS

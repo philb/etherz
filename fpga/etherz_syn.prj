@@ -6,6 +6,7 @@ add_file -verilog -lib work "top.v"
 add_file -verilog -lib work "interrupts.v" 
 add_file -verilog -lib work "fpl.v" 
 add_file -verilog -lib work "decode.v" 
+add_file -verilog -lib work "ide.v" 
 #implementation: "etherz_Implmnt"
 impl -add etherz_Implmnt -type fpga
 

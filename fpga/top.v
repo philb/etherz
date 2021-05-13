@@ -1,6 +1,6 @@
 module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
 	   D, SERIAL_CTS, IRQ, SERIAL_RTS, nOE_ADDR, SERIAL_RI, SERIAL_DCD, nOE_DATAIN, nOE_DATAOUT, BL,
-	   FIQ, nETH_CS, nETH_IRQ, ETH_CMD, nETH_WE, nETH_RE, RST, nIO_RESET, nMCU_RESET, nMCU_IRQ,
+	   FIQ, nETH_CS, nETH_IRQ, ETH_CMD, nETH_WE, nETH_RE, RST, nIO_RESET, nMCU_RESET, MCU_IRQ,
 	   nECONET_SEL, nFLASH_CE, IOGT, FPGA_DEBUG3, nMS1, SERIAL_DSR, SERIAL_DTR, FPGA_CLK, FPGA_SS2,
 	   FLASH_A, SERIAL_RXD, SERIAL_TXD, FPGA_CLK2, SERIAL_INVALID, FPGA_DEBUG1, FPGA_DEBUG2,
 	   nFPGA_SS, FPGA_SCK, FPGA_SDI, FPGA_SDO);
@@ -31,7 +31,7 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    input 	  RST;
    output 	  nIO_RESET;
    output 	  nMCU_RESET;
-   output 	  nMCU_IRQ;
+   output 	  MCU_IRQ;
    output 	  nECONET_SEL;
    output 	  nFLASH_CE;
    output 	  IOGT;
@@ -53,14 +53,31 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    input 	  FPGA_SDI;
    output 	  FPGA_SDO;
 
+   reg [5:0] 	  reset_counter;
+   wire 	  soft_reset;
+   wire 	  ext_reset;
+   wire 	  initial_reset;
+
    // main clock
    wire 	  clk;
    assign clk = FPGA_CLK;
 
-   wire 	  rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs, interrupt_mask_cs;
+   assign initial_reset = !(&reset_counter);
+   always @(posedge clk)
+     begin
+	if (initial_reset)
+	  reset_counter <= reset_counter + 1;
+     end
+
+   assign ext_reset = !RST;
+   assign soft_reset = 1'b0;
+
+   assign reset = ext_reset || initial_reset || soft_reset;
+
+   wire 	  rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs;
    wire 	  ide_irq, uart_tx_irq, uart_rx_irq;
 
-   decode decode_(A, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs, interrupt_mask_cs);
+   decode decode_(A, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs);
 
    // externally visible chip selects
    assign nFLASH_CE = !(rom_cs && !nIOC_SEL);
@@ -70,8 +87,30 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    assign nETH_RE = nRE;
    assign nETH_WE = nWE;
 
-   fpl fpl_(fpl_cs && !nIOC_SEL, nWE, D[7:0], FLASH_A[18:13], clk, !RST);
-   interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && IOC_SEL, !nRE, !nWE);
+   reg re, we;
+   reg re2, we2;
+   always @(posedge clk)
+     begin
+	if (reset)
+	  begin
+	     re <= 1'b0;
+	     re2 <= 1'b0;
+	     we <= 1'b0;
+	     we2 <= 1'b0;
+	  end
+	else
+	  begin
+	     re2 <= !nRE;
+	     we2 <= !nWE;
+	     re <= re2;
+	     we <= we2;
+	  end
+     end
+
+   fpl fpl_(fpl_cs && !nIOC_SEL, we, D, FLASH_A[18:13], clk, reset);
+   interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && IOC_SEL, re, we, reset);
+
+   ide ide_(A, D, ide_cs && !nIOC_SEL, ide2_cs && !nIOC_SEL, clk, ide_irq, re, we, reset, nFPGA_SS, FPGA_SS2, FPGA_SCK, FPGA_SDI, FPGA_SDO, MCU_IRQ);
 
    assign nIO_RESET = 1'b1;
 
