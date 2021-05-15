@@ -166,6 +166,7 @@ struct sd_mmc_card {
 	card_version_t version;    //!< Card version
 	uint8_t  bus_width;        //!< Number of DATA lin on bus (MCI only)
 	uint8_t csd[CSD_REG_BSIZE];//!< CSD register
+	uint8_t cid[CSD_REG_BSIZE];
 	uint8_t high_speed;        //!< High speed card (1)
 };
 
@@ -1547,6 +1548,9 @@ static bool sd_mmc_mci_card_init(void)
 			return false;
 		}
 	}
+	if (!driver_send_cmd(SDMMC_CMD10_SEND_CID, (uint32_t)sd_mmc_card->rca << 16))
+		return false;
+	driver_get_response_128(sd_mmc_card->cid);
 	if (IS_SDIO()) {
 		if (!sdio_get_max_speed()) {
 			return false;
@@ -1674,6 +1678,8 @@ static bool sd_mmc_mci_install_mmc(void)
 	if (!driver_send_cmd(SDMMC_CMD2_ALL_SEND_CID, 0)) {
 		return false;
 	}
+	driver_get_response_128(sd_mmc_card->cid);
+
 	// Assign relative address to the card.
 	sd_mmc_card->rca = 1;
 	if (!driver_send_cmd(MMC_CMD3_SET_RELATIVE_ADDR,
@@ -1815,6 +1821,15 @@ uint32_t sd_mmc_get_capacity(uint8_t slot)
 	}
 	sd_mmc_deselect_slot();
 	return sd_mmc_card->capacity;
+}
+
+uint8_t *sd_mmc_get_cid(uint8_t slot)
+{
+	if (SD_MMC_OK != sd_mmc_select_slot(slot)) {
+		return NULL;
+	}
+	sd_mmc_deselect_slot();
+	return &sd_mmc_card->cid[0];
 }
 
 bool sd_mmc_is_write_protected(uint8_t slot)

@@ -294,6 +294,8 @@ sd_mmc_err_t sdio_write_extended(uint8_t slot, uint8_t func_num, uint32_t addr,
 		uint8_t inc_addr, uint8_t *src, uint16_t size);
 #endif // SDIO_SUPPORT_ENABLE
 
+uint8_t *sd_mmc_get_cid(uint8_t slot);
+
 /** @} */
 
 #ifdef __cplusplus
