@@ -15,12 +15,12 @@
 // A13 A12 A11 A10
 // 0   x   x   x    ROM
 // 1   0   0   0    Econet
-// 1   0   0   1    IDE cmd file
+// 1   0   x   1    IDE cmd file
 // 1   0   1   0    IDE high byte
-// 1   0   1   1    Interrupt status and mask
 // 1   1   0   0    Flash page latch
 // 1   1   0   1    UART
 // 1   1   1   0    Ethernet (A9=CMD)
+// 1   1   1   1    Interrupt status and mask
 
 module decode(a, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, fpl_cs, uart_cs);
    input [13:2] a;
@@ -35,11 +35,11 @@ module decode(a, rom_cs, econet_cs, ethernet_cs, ide_cs, ide2_cs, interrupt_cs, 
 
    assign rom_cs =            (a[13] == 1'b0);
    assign econet_cs =         (a[13:10] == 4'b1000);
-   assign ide_cs =            (a[13:10] == 4'b1001);
+   assign ide_cs =            (a[13:10] == 4'b1001 || a[13:10] == 4'b1011);
    assign ide2_cs =           (a[13:10] == 4'b1010);
-   assign interrupt_cs =      (a[13:10] == 4'b1011);
    assign fpl_cs =            (a[13:10] == 4'b1100);
    assign uart_cs =           (a[13:10] == 4'b1101);
    assign ethernet_cs =       (a[13:10] == 4'b1110);
+   assign interrupt_cs =      (a[13:10] == 4'b1111);
    
 endmodule // decode
