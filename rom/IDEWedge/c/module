@@ -1,0 +1,139 @@
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include "swis.h"
+
+struct card
+{
+	void *ide_base;		// Must be first, code in transfer.s uses this
+	void *irq_status_reg;
+	void *irq_mask_reg;
+	void *reset_reg;
+	int claimed;
+};
+
+struct card *card;
+
+#define Service_ADFSPoduleIDE 0x10801
+#define Service_ADFSPoduleIDEDying 0x10802
+#define Service_PreReset 0x45
+
+extern void IDEReadSector(void);
+extern void IDEWriteSector(void);
+
+_kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
+{
+	int card_base = 0x3344000;
+	card = malloc(sizeof(*card));
+	memset(card, 0, sizeof(card));
+	card->ide_base = (char *)card_base + 0x2400;
+	card->irq_status_reg = (char *)card_base + 0x3c00;
+	card->irq_mask_reg = (char *)card_base + 0x3c08;
+	card->reset_reg = (char *)card_base + 0x3c0c;
+
+	{
+		_kernel_swi_regs r;
+		r.r[2] = (int)card->ide_base;
+		r.r[3] = (int)card->irq_status_reg;
+		r.r[4] = 0x20;
+		r.r[5] = (int)card->irq_mask_reg;
+		r.r[6] = 0x20;
+		r.r[7] = (int)&IDEReadSector;
+		r.r[8] = (int)&IDEWriteSector;
+		_kernel_swi(XOS_Bit | ADFS_SetIDEController, &r, &r);
+		card->claimed = 1;
+	}
+	return NULL;
+}
+
+_kernel_oserror *finalise(int fatal, int podule, void *priv)
+{
+	if (card->claimed)
+	{
+		_kernel_swi_regs r;
+		r.r[1] = Service_ADFSPoduleIDEDying;
+		_kernel_swi(XOS_Bit | OS_ServiceCall, &r, &r);
+	}
+
+	free(card);
+	return NULL;
+}
+
+unsigned short read_ide_reg(int offset)
+{
+	unsigned char *p = (unsigned char *)card->ide_base + (offset << 2);
+	unsigned short v = *p;
+	if (offset == 0)
+		v |= p[0x400] << 8;
+	return v;
+}
+
+void write_ide_reg(unsigned short value, int offset)
+{
+	unsigned char *p = (unsigned char *)card->ide_base + (offset << 2);
+	if (offset == 0)
+		p[0x400] = value >> 8;
+	*p = value;
+}
+
+_kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
+{
+	switch (swi_no)
+	{
+	case 0: /* ReadIDEReg */
+		r->r[0] = read_ide_reg(r->r[1]);
+		break;
+	case 1: /* WriteIDEReg */
+		write_ide_reg(r->r[0], r->r[1]);
+		break;
+	}
+
+	return NULL;
+}
+
+void service(int service_number, _kernel_swi_regs *r, void *priv)
+{
+	switch (service_number)
+	{
+	case Service_ADFSPoduleIDE:
+		/*
+		  Service_ADFSPoduleIDE
+		  (Service &10801)
+		  Entry 	
+		  R1 	Reason Code 67585 (&10801)
+		  R2 	Address of current disc controller
+		  R3 	Address of IRQ status register for controller
+		  R4 	Mask for IRQ status register
+		  When ANDed with the IRQ status register gives a non-zero value if IRQs are enabled
+		  R5 	Address of IRQ mask register for current disc controller
+		  R6 	Mask for IRQ mask register
+		  When ORRed with the IRQ mask register, enables IRQ
+		  R7 	Address of data read routine for current disc controller (0 for default)
+		  R8 	Address of write read routine for current disc controller (0 for default)
+		  Exit 	
+		  All registers preserved to pass on, else
+		  R1 	0 (claim service)
+		  R2 	Address of new disc controller
+		  R3 	Address of IRQ status register for new disc controller
+		  R4 	Mask for IRQ status register (AND)
+		  R5 	Address of IRQ mask register for controller
+		  R6 	Mask for IRQ mask register (OR)
+		  R7 	Address of data read routine for current disc controller (0 for default)
+		  R8 	Address of write read routine for current disc controller (0 for default)
+		*/
+		r->r[1] = 0;
+		r->r[2] = (int)card->ide_base;
+		r->r[3] = (int)card->irq_status_reg;
+		r->r[4] = 0x20;
+		r->r[5] = (int)card->irq_mask_reg;
+		r->r[6] = 0x20;
+		r->r[7] = (int)&IDEReadSector;
+		r->r[8] = (int)&IDEWriteSector;
+		card->claimed = 1;
+		break;
+		
+	case Service_PreReset:
+		*((char *)card->reset_reg) = 1;
+		break;
+	}
+}

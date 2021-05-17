@@ -1,0 +1,27 @@
+# Project:   IDEWedge
+
+# Toolflags:
+CCflags = -zps1 -wc -c -depend !Depend -IC: -zM 
+C++flags = -c -depend !Depend -IC:
+Linkflags = -rmf -c++ -o $@ 
+ObjAsmflags = -NoCache -depend !Depend 
+CMHGflags = 
+LibFileflags = -c -o $@ 
+Squeezeflags = -o $@
+
+# Final targets:
+IDEWedge: o.modhdr o.module C:o.stubs o.transfer
+        Link $(Linkflags) o.modhdr o.module C:o.stubs o.transfer
+        
+.c.o:;  cc $(ccflags) -o $@ $<
+.s.o:;  objasm $(objasmflags) -from $< -to $@
+.cmhg.o:; cmhg -o $@ $<
+
+# Dynamic dependencies:
+o.transfer: s.transfer
+o.module:	c.module
+o.module:	C:h.swis
+o.module:	C:h.kernel
+o.module:	c.module
+o.module:	C:h.swis
+o.module:	C:h.kernel
