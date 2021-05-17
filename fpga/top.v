@@ -24,7 +24,7 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
    output 	  BL;
    output 	  FIQ;
    output 	  nETH_CS;
-   output 	  nETH_IRQ;
+   input 	  nETH_IRQ;
    output 	  ETH_CMD;
    output 	  nETH_WE;
    output 	  nETH_RE;
@@ -107,10 +107,16 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
 	  end
      end
 
-   fpl fpl_(fpl_cs && !nIOC_SEL, we, D, FLASH_A[18:13], clk, reset);
-   interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && IOC_SEL, re, we, reset);
+   fpl fpl_(fpl_cs && !nIOC_SEL, re, we, D, FLASH_A[18:13], clk, reset);
+   interrupts interrupts_(IRQ, FIQ, !nECONET_FIQ, !nETH_IRQ, ide_irq, uart_tx_irq, uart_rx_irq, D, A, interrupt_cs && !nIOC_SEL, re, we, reset);
 
-   ide ide_(A, D, ide_cs && !nIOC_SEL, ide2_cs && !nIOC_SEL, clk, ide_irq, re, we, reset, nFPGA_SS, FPGA_SS2, FPGA_SCK, FPGA_SDI, FPGA_SDO, MCU_IRQ);
+   wire ide_obs;
+
+   ide ide_(A, D, ide_cs && !nIOC_SEL, ide2_cs && !nIOC_SEL, clk, ide_irq, re, we, reset, nFPGA_SS, FPGA_SS2, FPGA_SCK, FPGA_SDI, FPGA_SDO, MCU_IRQ, ide_obs);
+
+   assign FPGA_DEBUG3 = ide_obs;
+
+   assign D[7:0] = (!nIOC_SEL && uart_cs && re) ? 8'h55 : 8'bzzzzzzzz;
 
    assign nIO_RESET = 1'b1;
 
