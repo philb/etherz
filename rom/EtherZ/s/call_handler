@@ -1,0 +1,11 @@
+        AREA    |C$$code|,CODE,READONLY
+
+	EXPORT	do_call_handler
+do_call_handler	ROUT
+	stmfd sp!, {lr}
+	mov r12, r3
+	mov lr, pc
+	mov pc, r2
+	ldmfd sp!, {pc}^
+	END
+	

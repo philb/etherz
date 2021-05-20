@@ -1,0 +1,20 @@
+#ifndef ksz8851_h
+#define ksz8851_h
+
+#include "types.h"
+#include "mbuf.h"
+
+struct ksz8851
+{
+	volatile char *base;
+	int frame_id;
+};
+
+extern void ksz8851_write_reg16(struct ksz8851 *dev, uint8_t addr, uint16_t val);
+extern uint16_t ksz8851_read_reg16(struct ksz8851 *dev, uint8_t addr);
+extern void ksz8851_xmit_frame(struct ksz8851 *dev, struct mbuf *chain, size_t length);
+extern void ksz8851_init_hardware(struct ksz8851 *dev);
+extern void ksz8851_interrupt(struct ksz8851 *dev);
+extern void ksz8851_set_mac(struct ksz8851 *dev, uint8_t *mac);
+
+#endif

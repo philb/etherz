@@ -1,0 +1,635 @@
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "swis.h"
+#include "mbuf.h"
+#include "dcistructs.h"
+#include "types.h"
+#include "ksz8851.h"
+
+#define DCI_STATUS_STARTING 0
+#define DCI_STATUS_TERMINATING 1
+
+#define INQUIRE_FLAGS (INQ_HWADDRVALID)
+
+#define SWI_BASE	0x50500
+
+#define ANY_TYPE	0xffffffff
+
+#define PODULE_BASE 0x3344000
+#define KSZ8851_OFFSET 0x3800
+#define IRQSTATUS_OFFSET 0x3c00
+#define IRQMASK_OFFSET 0x3c04
+
+struct dci_claim
+{
+	struct dci_claim *next;
+	uint32_t pw;
+	uint16_t type;
+	uint8_t address_level;
+	uint8_t error_level;
+	void *handler;
+	bool unsafe_ok;
+};
+
+struct tx_req
+{
+	struct mbuf *chain;
+	size_t length;
+	bool driver_frees_chain;	/* Driver always frees first mbuf */
+	struct tx_req *next;
+};
+
+struct card
+{
+	struct dib dib;
+	bool set_callback;
+	unsigned char hw_addr[6];
+
+	struct
+	{
+		struct dci_claim *normal;
+		struct dci_claim *sink;
+		struct dci_claim *monitor;
+		struct dci_claim *ieee;
+	} claims;
+
+	struct ksz8851 ctrl;
+
+	struct
+	{
+		struct mbctl ctl;
+		bool open;
+	} mb;
+
+	struct tx_req *tx_queue, *tx_queue_end;
+	bool tx_busy;
+	void *irq_mask;
+
+	struct
+	{
+		int irqs;
+	} stats;
+};
+
+static struct card card;
+
+#define ETH_IRQ_BIT 0x40
+
+static void card_irq_on(struct card *c)
+{
+	*((volatile uint8_t *)c->irq_mask) |= ETH_IRQ_BIT;
+}
+
+static void card_irq_off(struct card *c)
+{
+	*((volatile uint8_t *)c->irq_mask) &= ~ETH_IRQ_BIT;
+}
+
+static void *rma_alloc(size_t size)
+{
+	_kernel_swi_regs r;
+	r.r[0] = 6;
+	r.r[3] = size;
+	_kernel_swi(XOS_Bit | OS_Module, &r, &r);
+	return (void *)r.r[2];
+}
+
+static void rma_free(void *ptr)
+{
+	_kernel_swi_regs r;
+	r.r[0] = 7;
+	r.r[2] = (int)ptr;
+	_kernel_swi(XOS_Bit | OS_Module, &r, &r);
+}
+
+static void kick_transmitter(struct card *c)
+{
+	if (c->tx_queue)
+	{
+		struct tx_req *tx = c->tx_queue, *next;
+		struct mbuf *mb = tx->chain;
+		ksz8851_xmit_frame(&c->ctrl, mb, tx->length);
+		c->tx_busy = 1;
+		next = tx->next;
+		if (tx->driver_frees_chain)
+			c->mb.ctl.freem(&c->mb.ctl, mb);
+		else	/* Just free the header mbuf */
+			c->mb.ctl.free(&c->mb.ctl, mb);
+		free(tx);
+		c->tx_queue = next;
+		if (next == NULL)
+			c->tx_queue_end = NULL;
+	}
+}
+
+void etherz_tx_complete(void)
+{
+	struct card *c = &card;
+	c->tx_busy = false;
+	kick_transmitter(c);
+}
+
+static void SendDCIDriverStatus(struct card *c, int status)
+{
+	_kernel_swi_regs r;
+	_kernel_oserror *e;
+	r.r[0] = (int)&c->dib;
+	r.r[1] = Service_DCIDriverStatus;
+	r.r[2] = status;
+	r.r[3] = DCIVERSION;
+	e =_kernel_swi(XOS_Bit | OS_ServiceCall, &r, &r);
+}
+
+static void SendDCIFrameTypeFree(struct card *c, struct dci_claim *what)
+{
+	_kernel_swi_regs r;
+	r.r[0] = (int)&c->dib;
+	r.r[1] = Service_DCIFrameTypeFree;
+	r.r[2] = what->type;
+	r.r[3] = what->address_level;
+	r.r[4] = what->error_level;
+	_kernel_swi(XOS_Bit | OS_ServiceCall, &r, &r);
+}
+
+extern void dci_starting_veneer(void);
+extern void interrupt_veneer(void);
+
+void dci_starting_veneer_handler(void)
+{
+	struct card *c = &card;
+
+	c->set_callback = false;
+	SendDCIDriverStatus(c, DCI_STATUS_STARTING);
+}
+
+void open_mbufmanager(struct card *c)
+{
+	_kernel_swi_regs r ;
+
+	memset(&c->mb.ctl, 0, sizeof(struct mbctl));
+
+	c->mb.ctl.mbcsize = sizeof(struct mbctl);
+	c->mb.ctl.mbcvers = MBUF_MANAGER_VERSION;
+
+	r.r[0] = (int)&c->mb.ctl;
+
+	if (_kernel_swi(XOS_Bit | Mbuf_OpenSession, &r, &r) == NULL)
+		c->mb.open = true;
+}
+
+void close_mbufmanager(struct card *c)
+{
+	_kernel_swi_regs r;
+	r.r[0] = (int)&c->mb.ctl;
+	_kernel_swi(XOS_Bit | Mbuf_CloseSession, &r, &r);
+}
+
+void interrupt_handler(_kernel_swi_regs *r, void *pw)
+{
+	struct card *c = &card;
+	c->stats.irqs++;
+	card_irq_off(c);
+	ksz8851_interrupt(&c->ctrl);
+	card_irq_on(c);
+}
+
+static void fill_regs_for_irq(_kernel_swi_regs *r, void *priv)
+{
+	r->r[0] = 13;
+	r->r[1] = (int)interrupt_veneer;
+	r->r[2] = (int)priv;
+	r->r[3] = PODULE_BASE + IRQSTATUS_OFFSET;
+	r->r[4] = ETH_IRQ_BIT;
+}
+
+#define PodIRQBit          0x20        // mask bit in irqb mask reg
+#define PodIRQMaskAddress  0x3200028   // irqb mask reg address
+
+_kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
+{
+	struct card *c = &card;
+	c->dib.dib_swibase = SWI_BASE;
+	c->dib.dib_name = (unsigned char *)"ez";
+	c->dib.dib_address = c->hw_addr;
+	c->dib.dib_module = (unsigned char *)"EtherZ";
+	c->dib.dib_location = (unsigned char *)"Internal expansion";
+	c->dib.dib_inquire = INQUIRE_FLAGS;
+
+	c->ctrl.base = (char *)PODULE_BASE + KSZ8851_OFFSET;
+
+	c->hw_addr[0] = 0x20;
+	c->hw_addr[1] = 0x20;
+	c->hw_addr[2] = 0x20;
+	c->hw_addr[3] = 0x20;
+	c->hw_addr[4] = 0x20;
+	c->hw_addr[5] = 0x20;
+
+	c->irq_mask = (char *)PODULE_BASE + IRQMASK_OFFSET;
+
+	{
+		_kernel_swi_regs r;
+		r.r[0] = (int)dci_starting_veneer;
+		r.r[1] = (int)priv;
+		_kernel_swi(OS_AddCallBack, &r, &r);
+	}
+
+	{
+		_kernel_swi_regs r;
+		fill_regs_for_irq(&r, priv);
+		_kernel_swi(OS_ClaimDeviceVector, &r, &r);
+	}
+
+	open_mbufmanager(c);
+
+	ksz8851_init_hardware(&c->ctrl);
+	ksz8851_set_mac(&c->ctrl, &c->hw_addr[0]);
+
+	card_irq_on(c);
+
+	*((volatile uint8_t *)PodIRQMaskAddress) |= PodIRQBit;
+
+	return NULL;
+}
+
+_kernel_oserror *finalise(int fatal, int podule, void *priv)
+{
+	struct card *c = &card;
+
+	card_irq_off(c);
+
+	if (c->mb.open)
+		close_mbufmanager(c);
+
+	{
+		_kernel_swi_regs r;
+		fill_regs_for_irq(&r, priv);
+		_kernel_swi(OS_ReleaseDeviceVector, &r, &r);
+	}
+
+	if (c->set_callback)
+	{
+		// "Can't" happen except in very contrived situations
+		_kernel_swi_regs r;
+		r.r[0] = (int)dci_starting_veneer;
+		r.r[1] = (int)priv;
+		_kernel_swi(OS_RemoveCallBack, &r, &r);
+		c->set_callback = false;
+	}
+	else
+		SendDCIDriverStatus(c, DCI_STATUS_TERMINATING);
+	return NULL;
+}
+
+bool unlink_protocol(struct card *card, uint32_t pw, uint32_t type,
+		     struct dci_claim **c)
+{
+	while (*c)
+	{
+		struct dci_claim *this = *c;
+		if (this->pw == pw && (type == ANY_TYPE || type == this->type))
+		{
+			struct dci_claim *next = this->next;
+			SendDCIFrameTypeFree(card, this);
+			free(this);
+			*c = next;
+			return true;
+		}
+		c = &(this->next);
+	}
+
+	return false;
+}
+
+void service_EnumerateNetworkDrivers(_kernel_swi_regs *r)
+{
+	struct card *c = &card;
+	struct chaindib *chd = rma_alloc(sizeof(*chd));
+	chd->chd_next = (struct chaindib *)r->r[0];
+	chd->chd_dib = &c->dib;
+	r->r[0] = (int)chd;
+}
+
+void service_DCIProtocolStatus(_kernel_swi_regs *r)
+{
+	struct card *c = &card;
+	if (r->r[2] == DCI_STATUS_TERMINATING) {
+		/* Protocol module dying */
+		unlink_protocol(c, r->r[0], ANY_TYPE, &c->claims.normal);
+		unlink_protocol(c, r->r[0], ANY_TYPE, &c->claims.sink);
+		unlink_protocol(c, r->r[0], ANY_TYPE, &c->claims.monitor);
+	}
+}
+
+void service(int service_number, _kernel_swi_regs *r, void *priv)
+{
+	switch (service_number)
+	{
+	case Service_EnumerateNetworkDrivers:
+		service_EnumerateNetworkDrivers(r);
+		break;
+
+	case Service_DCIProtocolStatus:
+		service_DCIProtocolStatus(r);
+		break;
+	}
+}
+
+static _kernel_oserror bad_mtu = { 0x20e19, "Invalid MTU" };
+static _kernel_oserror bad_swi = { SWI_BASE, "Unknown EtherZ SWI" };
+static _kernel_oserror no_mbmanager = { SWI_BASE + 1, "MBufManager not present" };
+static _kernel_oserror invalid_unit = { 0x20e06, "Invalid unit number" };
+static _kernel_oserror wrong_flags = { 0x20e16, "Invalid flags in R0" };
+static _kernel_oserror frame_too_long = { 0x20e28, "Frame too long" };
+static _kernel_oserror no_mbufs = { 0x20e37, "Not enough mbufs available" };
+static _kernel_oserror already_claimed = { 0x20e87, "Frame type already claimed" };
+static _kernel_oserror bad_claim = { 0x20e16, "Illegal frame type" };
+static _kernel_oserror bad_release = { 0x20e16, "Frame type not claimed" };
+
+#define TRANSMIT_FLAG_USE_SA	0x1
+#define TRANSMIT_FLAG_RETAIN	0x2
+
+struct mbuf *etherz_alloc_mbuf(size_t len)
+{
+	struct card *c = &card;
+	return c->mb.ctl.alloc_c(&c->mb.ctl, len, NULL);
+}
+
+static size_t mbuf_chain_length(struct mbuf *mb)
+{
+	size_t length = 0;
+	while (mb)
+	{
+		length += mb->m_len;
+		mb = mb->m_next;
+	}
+	return length;
+}
+
+static _kernel_oserror *do_transmit(struct card *c, _kernel_swi_regs *r)
+{
+	uint16_t type = r->r[2];
+	struct mbuf *mb = (struct mbuf *)r->r[3];
+	uint8_t *da = (uint8_t *)r->r[4];
+	uint8_t *sa = (uint8_t *)r->r[5];
+	struct mbuf *hdr;
+	uint8_t *hp;
+	struct tx_req *tx;
+	size_t frame_size;
+
+	if (!c->mb.open)
+		return &no_mbmanager;
+
+	if (r->r[1] != 0)
+		return &invalid_unit;
+
+	if (r->r[0] & ~(TRANSMIT_FLAG_USE_SA | TRANSMIT_FLAG_RETAIN))
+		return &wrong_flags;
+
+	frame_size = mbuf_chain_length(mb);
+	if (frame_size > 1500)
+		return &frame_too_long;
+
+	/* For reasons passing understanding, we get the Ethernet frame
+	   header in registers and must make an mbuf for it ourselves. */
+	hdr = etherz_alloc_mbuf(14);
+	if (!hdr)
+		return &no_mbufs;
+
+	if (!r->r[0] & TRANSMIT_FLAG_USE_SA)
+		sa = &c->hw_addr[0];
+
+	hp = (uint8_t *)hdr + hdr->m_off;
+	memcpy(hp, da, 6);
+	memcpy(hp + 6, sa, 6);
+	hp[12] = type >> 8;
+	hp[13] = type & 0xff;
+	hdr->m_len = 14;
+	hdr->m_next = mb;
+
+	tx = malloc(sizeof(*tx));
+	tx->chain = hdr;
+	tx->length = frame_size + 14;
+	tx->driver_frees_chain = (r->r[0] & TRANSMIT_FLAG_RETAIN) ? false : true;
+	tx->next = NULL;
+
+	card_irq_off(c);
+	if (c->tx_queue_end)
+		c->tx_queue_end->next = tx;
+	else
+		c->tx_queue = tx;
+	c->tx_queue_end = tx;
+
+	if (!c->tx_busy)
+		kick_transmitter(c);
+	card_irq_on(c);
+
+	return NULL;
+}
+
+static struct dci_claim *find_claim(struct dci_claim *list, uint16_t type)
+{
+	struct dci_claim *i;
+	for (i = list; i; i = i->next)
+	{
+		if (i->type == type)
+			return i;
+	}
+	return NULL;
+}
+
+static struct dci_claim *find_best_claim(struct card *c, uint16_t type)
+{
+	struct dci_claim *r = NULL;
+	if (type < 0x600)
+		r = c->claims.ieee;
+	else
+		r = find_claim(c->claims.normal, type);
+
+	if (r == NULL)
+		r = c->claims.monitor;
+
+	if (r == NULL)
+		r = c->claims.sink;
+
+	return r;
+}
+
+static void call_handler(struct card *c, struct dci_claim *h, struct mbuf *mb)
+{
+	extern void do_call_handler(struct dib *, struct mbuf *, void *, uint32_t);
+	do_call_handler(&c->dib, mb, h->handler, h->pw);
+}
+
+void etherz_receive_frame(struct mbuf *mb)
+{
+	char buf[32];
+	struct card *c = &card;
+	uint16_t type;
+	uint8_t *p = (uint8_t *)mb + mb->m_off;
+	struct dci_claim *handler;
+	RxHdr *rxh = (RxHdr *)p;
+	type = rxh->rx_frame_type;
+	
+	handler = find_best_claim(c, type);
+	if (handler)
+		call_handler(c, handler, mb);
+	else
+		c->mb.ctl.freem(&c->mb.ctl, mb);
+}
+
+/*
+Filter
+SWI (dib_swibase + 5)
+
+On entry:	 R0 = flags (see below)
+		 R1 = unit number
+		 R2 = frame type
+		 R3 = address level (for write)
+		 R4 = error level (for write)
+		 R5 = private word pointer
+		 R6 = address of handler routine for received frames
+*/
+static struct dci_claim *new_claim(uint8_t address_level, uint8_t error_level,
+				   uint32_t pw, void *handler,
+				   bool unsafe_ok, uint16_t type)
+{
+	struct dci_claim *c = malloc(sizeof(*c));
+	memset(c, 0, sizeof(c));
+	c->handler = handler;
+	c->pw = pw;
+	c->address_level = address_level;
+	c->error_level = error_level;
+	c->unsafe_ok = unsafe_ok;
+	c->type = type;
+	return c;
+}
+
+static _kernel_oserror *do_filter(struct card *c, _kernel_swi_regs *r)
+{
+	uint16_t level;
+	uint16_t type;
+
+	if (r->r[1] != 0)
+		return &invalid_unit;
+
+	if (r->r[0] & ~(FILTER_RELEASE | FILTER_NO_UNSAFE))
+		return &wrong_flags;
+
+	level = r->r[2] >> 16;
+	type = r->r[2] & 0xffff;
+
+	if (!(r->r[0] & FILTER_RELEASE))
+	{
+		struct dci_claim *claim;
+		bool unsafe_ok = (r->r[0] & FILTER_UNSAFE_OK) ? true : false;
+
+		/* New claim */
+		switch (level)
+		{
+		case FRMLVL_E2SPECIFIC:
+			if (c->claims.monitor || find_claim(c->claims.normal, type))
+				return &already_claimed;
+			claim = new_claim(r->r[3], r->r[4], r->r[5], (void *)r->r[6],
+					  unsafe_ok, type);
+			claim->next = c->claims.normal;
+			c->claims.normal = claim;
+			break;
+		case FRMLVL_E2SINK:
+			if (c->claims.sink)
+				return &already_claimed;
+			claim = new_claim(r->r[3], r->r[4], r->r[5], (void *)r->r[6],
+					  unsafe_ok, 0);
+			claim->next = c->claims.sink;
+			c->claims.sink = claim;
+			break;
+		case FRMLVL_E2MONITOR:
+			if (c->claims.normal || c->claims.sink)
+				return &already_claimed;
+			claim = new_claim(r->r[3], r->r[4], r->r[5], (void *)r->r[6],
+					  unsafe_ok, 0);
+			claim->next = c->claims.monitor;
+			c->claims.monitor = claim;
+			break;
+		case FRMLVL_IEEE:
+			if (c->claims.ieee)
+				return &already_claimed;
+			claim = new_claim(r->r[3], r->r[4], r->r[5], (void *)r->r[6],
+					  unsafe_ok, type);
+			claim->next = c->claims.ieee;
+			c->claims.ieee = claim;
+			break;
+		}
+	}
+	else
+	{
+		/* Freeing a claim */
+		switch (level)
+		{
+		}
+	}
+
+	return NULL;
+}
+
+_kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
+{
+	struct card *c = &card;
+
+	switch (swi_no)
+	{
+	case DCI4Version:
+		r->r[1] = DCIVERSION;
+		break;
+
+	case DCI4Inquire:
+		r->r[2] = INQUIRE_FLAGS;
+		break;
+
+	case 2: /* GetNetworkMTU */
+		r->r[2] = 1500;
+		break;
+
+	case 3: /* SetNetworkMTU */
+		if (r->r[2] != 1500) {
+			return &bad_mtu;
+		}
+		break;
+
+	case DCI4Transmit:
+		return do_transmit(c, r);
+
+	case DCI4Filter:
+		return do_filter(c, r);
+
+	case 6: /* Stats */
+		break;
+
+	case 7: /* MulticastRequest */
+		break;
+
+	case 0x20: /* ReadRegister */
+		r->r[0] = ksz8851_read_reg16(&c->ctrl, r->r[1]);
+		break;
+
+	case 0x21: /* WriteRegister */
+		ksz8851_write_reg16(&c->ctrl, r->r[1], r->r[0]);
+		break;
+
+	case 0x22: /* ReadMIIRegister */
+		break;
+
+	case 0x23: /* WriteMIIRegister */
+		break;
+
+	default:
+		return &bad_swi;
+	}
+	return NULL;
+}
+
+_kernel_oserror *cmd(char *arg_string, int argc, int cmd_no, void *priv)
+{
+	return NULL;
+}

@@ -1,0 +1,3 @@
+extern void etherz_tx_complete(void);
+extern struct mbuf *etherz_alloc_mbuf(size_t len);
+extern void etherz_receive_frame(struct mbuf *);
