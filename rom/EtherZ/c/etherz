@@ -356,6 +356,12 @@ struct mbuf *etherz_alloc_mbuf(size_t len)
 	return c->mb.ctl.alloc_c(&c->mb.ctl, len, NULL);
 }
 
+void etherz_free_mbuf(struct mbuf *mb)
+{
+	struct card *c = &card;
+	c->mb.ctl.free(&c->mb.ctl, mb);
+}
+
 static size_t mbuf_chain_length(struct mbuf *mb)
 {
 	size_t length = 0;

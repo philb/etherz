@@ -200,6 +200,11 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			RxHdr *rxh;
 			size_t this_mbuf;
 
+			if (!hmb)
+			{
+				ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);
+				continue;
+			}
 			rxh = (RxHdr *)((uint8_t *)hmb + hmb->m_off);
 			memset(rxh, 0, sizeof(rxh));
 			ksz8851_write_reg16(dev, RXFDPR, RXFDPR_VAL);
@@ -225,6 +230,12 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			rxh->rx_frame_type |= GET_DATA(dev);
 			length -= (14 + 4);
 			mb = etherz_alloc_mbuf(length);
+			if (!mb)
+			{
+				etherz_free_mbuf(hmb);
+				ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);
+				continue;
+			}
 			mb->m_type = MT_DATA;
 			mb->m_list = NULL;
 			hmb->m_next = mb;
