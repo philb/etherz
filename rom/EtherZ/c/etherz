@@ -670,7 +670,7 @@ static _kernel_oserror *do_stats(struct card *c, _kernel_swi_regs *r)
 		SET(stats, excess_collisions);
 		SET(stats, tx_frames);
 		SET(stats, tx_bytes);
-		SET(stats, last_dest_addr);
+		memset(stats->st_last_dest_addr, 0xff, 6);
 
 		SET(stats, crc_failures);
 		SET(stats, frame_alignment_errors);
@@ -680,7 +680,7 @@ static _kernel_oserror *do_stats(struct card *c, _kernel_swi_regs *r)
 		SET(stats, jabbers);
 		SET(stats, rx_frames);
 		SET(stats, rx_bytes);
-		SET(stats, last_src_addr);
+		memset(stats->st_last_src_addr, 0xff, 6);
 		return NULL;
 	}
 
