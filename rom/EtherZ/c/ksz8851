@@ -202,6 +202,7 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 
 			if (!hmb)
 			{
+				etherz_frame_dropped();
 				ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);
 				continue;
 			}
@@ -233,6 +234,7 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			if (!mb)
 			{
 				etherz_free_mbuf(hmb);
+				etherz_frame_dropped();
 				ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);
 				continue;
 			}

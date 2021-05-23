@@ -67,10 +67,12 @@ struct card
 	bool tx_busy;
 	void *irq_mask;
 
+	struct stats stats;
+
 	struct
 	{
 		int irqs;
-	} stats;
+	} ext_stats;
 };
 
 static struct card card;
@@ -122,6 +124,12 @@ static void kick_transmitter(struct card *c)
 		if (next == NULL)
 			c->tx_queue_end = NULL;
 	}
+}
+
+void etherz_frame_dropped(void)
+{
+	struct card *c = &card;
+	c->stats.st_dropped_frames++;
 }
 
 void etherz_tx_complete(void)
@@ -189,7 +197,7 @@ void close_mbufmanager(struct card *c)
 void interrupt_handler(_kernel_swi_regs *r, void *pw)
 {
 	struct card *c = &card;
-	c->stats.irqs++;
+	c->ext_stats.irqs++;
 	card_irq_off(c);
 	ksz8851_interrupt(&c->ctrl);
 	card_irq_on(c);
@@ -477,7 +485,7 @@ void etherz_receive_frame(struct mbuf *mb)
 	struct dci_claim *handler;
 	RxHdr *rxh = (RxHdr *)p;
 	type = rxh->rx_frame_type;
-	
+
 	handler = find_best_claim(c, type);
 	if (handler)
 		call_handler(c, handler, mb);
