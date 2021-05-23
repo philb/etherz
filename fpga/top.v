@@ -120,8 +120,8 @@ module top(A, nWE, nRE, nIOC_SEL, nECONET_FIQ, REF8M, RnW,
 
    assign nIO_RESET = 1'b1;
 
-   assign nOE_DATAIN = nIOC_SEL || nWE;
-   assign nOE_DATAOUT = nIOC_SEL || nRE;
+   assign nOE_DATAOUT = nIOC_SEL || (nRE && !re);
+   assign nOE_DATAIN = nIOC_SEL || (re || !nRE);
    assign nOE_ADDR = 1'b0;
 
 endmodule // top
