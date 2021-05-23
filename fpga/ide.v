@@ -69,7 +69,7 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
 		     (reg_a == 4'b0100) ? lba1 :
 		     (reg_a == 4'b0101) ? lba2 :
 		     (reg_a == 4'b0110) ? dhr :
-		     (reg_a == 4'b1110) ? drive_addr :
+		     (reg_a == 4'b1111) ? drive_addr :
 		     status;
    assign cs2_dout = bsy ? 8'hb5 : hidata[7:0];
    assign d = (cs1 && re) ? (cs1_dout) : ((cs2 && re) ? (cs2_dout) : 8'bzzzzzzzz);
