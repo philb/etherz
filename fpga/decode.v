@@ -1,7 +1,5 @@
 // Ian Stocks hardware addresses from
 // https://stardot.org.uk/forums/viewtopic.php?f=16&t=15205&
-//+0x0000 - 0x1FFF ROM window (2 KB)
-//+0x2000 ROM page register
 //+0x2400 IDE reg 0
 //+0x2404 IDE reg 1
 //+0x2408 IDE reg 2
