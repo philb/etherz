@@ -487,7 +487,6 @@ static void call_handler(struct card *c, struct dci_claim *h, struct mbuf *mb)
 
 void etherz_receive_frame(struct mbuf *mb)
 {
-	char buf[32];
 	struct card *c = &card;
 	uint16_t type;
 	uint8_t *p = (uint8_t *)mb + mb->m_off;
@@ -583,6 +582,8 @@ static _kernel_oserror *do_filter(struct card *c, _kernel_swi_regs *r)
 			claim->next = c->claims.ieee;
 			c->claims.ieee = claim;
 			break;
+		default:
+			return &bad_claim;
 		}
 	}
 	else
