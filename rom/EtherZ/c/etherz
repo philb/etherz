@@ -11,7 +11,7 @@
 #define DCI_STATUS_STARTING 0
 #define DCI_STATUS_TERMINATING 1
 
-#define INQUIRE_FLAGS (INQ_HWADDRVALID)
+#define INQUIRE_FLAGS (INQ_HWADDRVALID | INQ_HASSTATS)
 
 #define SWI_BASE	0x50500
 
@@ -72,6 +72,9 @@ struct card
 	struct
 	{
 		int irqs;
+		int tx_release_frames;
+		int speed;
+		bool mdix;
 	} ext_stats;
 };
 
@@ -124,6 +127,7 @@ static void kick_transmitter(struct card *c)
 			c->mb.ctl.freem(&c->mb.ctl, mb);
 		else	/* Just free the header mbuf */
 			c->mb.ctl.free(&c->mb.ctl, mb);
+		c->ext_stats.tx_release_frames++;
 		free(tx);
 		c->tx_queue = next;
 		if (next == NULL)
@@ -230,6 +234,7 @@ static void fill_regs_for_irq(_kernel_swi_regs *r, void *priv)
 _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 {
 	struct card *c = &card;
+
 	c->dib.dib_swibase = SWI_BASE;
 	c->dib.dib_name = (unsigned char *)"ez";
 	c->dib.dib_address = c->hw_addr;
@@ -245,6 +250,8 @@ _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 	c->hw_addr[3] = 0x20;
 	c->hw_addr[4] = 0x20;
 	c->hw_addr[5] = 0x20;
+
+	c->stats.st_interface_type = ST_TYPE_10BASET;
 
 	c->irq_mask = (char *)PODULE_BASE + IRQMASK_OFFSET;
 
@@ -420,8 +427,13 @@ static _kernel_oserror *do_transmit(struct card *c, _kernel_swi_regs *r)
 	if (!hdr)
 		return &no_mbufs;
 
+	c->stats.st_tx_frames++;
+	c->stats.st_tx_bytes += frame_size;
+
 	if (!r->r[0] & TRANSMIT_FLAG_USE_SA)
 		sa = &c->hw_addr[0];
+
+	memcpy(&c->stats.st_last_dest_addr[0], da, 6);
 
 	hp = (uint8_t *)hdr + hdr->m_off;
 	memcpy(hp, da, 6);
@@ -493,6 +505,9 @@ void etherz_receive_frame(struct mbuf *mb)
 	struct dci_claim *handler;
 	RxHdr *rxh = (RxHdr *)p;
 	type = rxh->rx_frame_type;
+
+	memcpy(&c->stats.st_last_src_addr[0], rxh->rx_src_addr, 6);
+	c->stats.st_rx_frames++;
 
 	handler = find_best_claim(c, type);
 	if (handler)
@@ -597,6 +612,68 @@ static _kernel_oserror *do_filter(struct card *c, _kernel_swi_regs *r)
 	return NULL;
 }
 
+static void update_stats(struct card *c)
+{
+	uint16_t phystat = ksz8851_get_phy_stat(&c->ctrl);
+	c->stats.st_link_polarity = (phystat & (1 << 13)) ? 0 : 1;
+	c->ext_stats.speed = (phystat & (1 << 10)) ? 100 : 10;
+	c->ext_stats.mdix = (phystat & (1 << 7)) ? false : true;
+	c->stats.st_link_status = ST_STATUS_OK | ((phystat & (1 << 5)) ? ST_STATUS_ACTIVE : 0);
+	c->stats.st_collisions += ksz8851_read_mib(&c->ctrl, 0x1c);
+	c->stats.st_excess_collisions += ksz8851_read_mib(&c->ctrl, 0x1d);
+	c->stats.st_tx_bytes += ksz8851_read_mib(&c->ctrl, 0x15);
+	c->stats.st_rx_bytes += ksz8851_read_mib(&c->ctrl, 0x00);
+	c->stats.st_overlong_frames += ksz8851_read_mib(&c->ctrl, 0x04);
+	c->stats.st_jabbers += ksz8851_read_mib(&c->ctrl, 0x05);
+	c->stats.st_crc_failures += ksz8851_read_mib(&c->ctrl, 0x07);
+	c->stats.st_runt_frames += ksz8851_read_mib(&c->ctrl, 0x02);
+	c->stats.st_frame_alignment_errors += ksz8851_read_mib(&c->ctrl, 0x08);
+}
+
+static _kernel_oserror *do_stats(struct card *c, _kernel_swi_regs *r)
+{
+	struct stats *stats = (struct stats *)r->r[2];
+
+	if (r->r[1] != 0)
+		return &invalid_unit;
+
+	if (r->r[0] & ~1)
+		return &wrong_flags;
+
+#define SET(s, x) \
+	do { memset(&s->st_##x, 0xff, sizeof(s->st_##x)); } while (0)
+
+	if ((r->r[0] & 1) == 0)
+	{
+		SET(stats, interface_type);
+		SET(stats, link_status);
+		SET(stats, link_polarity);
+		SET(stats, link_failures);
+
+		SET(stats, collisions);
+		SET(stats, excess_collisions);
+		SET(stats, tx_frames);
+		SET(stats, tx_bytes);
+		SET(stats, last_dest_addr);
+
+		SET(stats, crc_failures);
+		SET(stats, frame_alignment_errors);
+		SET(stats, dropped_frames);
+		SET(stats, runt_frames);
+		SET(stats, overlong_frames);
+		SET(stats, jabbers);
+		SET(stats, rx_frames);
+		SET(stats, rx_bytes);
+		SET(stats, last_src_addr);
+		return NULL;
+	}
+
+	update_stats(c);
+	memcpy(stats, &c->stats, sizeof(*stats));
+
+	return NULL;
+}
+
 _kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
 {
 	struct card *c = &card;
@@ -628,7 +705,7 @@ _kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
 		return do_filter(c, r);
 
 	case DCI4Stats:
-		break;
+		return do_stats(c, r);
 
 	case 7: /* MulticastRequest */
 		break;
@@ -655,5 +732,37 @@ _kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
 
 _kernel_oserror *cmd(char *arg_string, int argc, int cmd_no, void *priv)
 {
+	struct card *c = &card;
+	_kernel_oserror *err;
+
+	switch (cmd_no) {
+	case 0: /* EZStats */
+		{
+			char buf[64];
+			_kernel_swi_regs r;
+			update_stats(c);
+			if (c->stats.st_link_status & ST_STATUS_ACTIVE)
+			{
+				sprintf(buf, "Link up %dMbps MDI%s polarity %s\r\n", c->ext_stats.speed,
+					c->ext_stats.mdix ? "-X" : "", c->stats.st_link_polarity ? "normal" : "reversed");
+				r.r[0] = (int)buf;
+			}
+			else
+			{
+				r.r[0] = (int)"Link down\r\n";
+			}
+			err = _kernel_swi(XOS_Bit | OS_Write0, &r, &r);
+			if (err) return err;
+			sprintf(buf, "Interrupts %d\r\n", c->ext_stats.irqs);
+			r.r[0] = (int)buf;
+			err = _kernel_swi(XOS_Bit | OS_Write0, &r, &r);
+			if (err) return err;
+			sprintf(buf, "Transmit frames %ld released %d\r\n", c->stats.st_tx_frames, c->ext_stats.tx_release_frames);
+			r.r[0] = (int)buf;
+			err = _kernel_swi(XOS_Bit | OS_Write0, &r, &r);
+			if (err) return err;
+		}
+		break;
+	}
 	return NULL;
 }
