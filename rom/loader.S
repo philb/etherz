@@ -22,18 +22,22 @@
 	bics	pc, lr, #V_bit
 
 read_byte:
+	@ mask off hardware address from combined address and clear speed bits
 	ldr	r3, =0b00000011111001111111000000000000
 	and	r10, r11, r3
-	orr	r10, r11, #0b000000000000100000000000000000000
+	@ select fast cycles
+	orr	r10, r10, #0b000000000000100000000000000000000
 	cmp 	r1, #(128 * 1024) - (1 << page_shift)
 	bhs	out_of_range
 	mov	r2, r1, lsr #page_shift
 	add	r2, r2, #1
-	add	r3, r10, #fpl_addr
-	strb	r2, [r3]
+	mov	r3, #fpl_addr
+	strb	r2, [r10, r3]
 	bic	r2, r1, #(0x7f << page_shift)
 	ldrb	r0, [r10, r2, lsl #2]
 	bics	pc, lr, #V_bit
+
+	.ltorg
 
 out_of_range:
 	adr	r0, 1f
