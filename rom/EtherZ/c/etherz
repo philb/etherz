@@ -191,7 +191,7 @@ static void start_card(struct card *c)
 	*((volatile uint8_t *)PodIRQMaskAddress) |= PodIRQBit;
 }
 
-void open_mbufmanager(struct card *c)
+static void open_mbufmanager(struct card *c)
 {
 	_kernel_swi_regs r ;
 
@@ -206,7 +206,7 @@ void open_mbufmanager(struct card *c)
 		c->mb.open = true;
 }
 
-void close_mbufmanager(struct card *c)
+static void close_mbufmanager(struct card *c)
 {
 	_kernel_swi_regs r;
 	r.r[0] = (int)&c->mb.ctl;
@@ -306,8 +306,8 @@ _kernel_oserror *finalise(int fatal, int podule, void *priv)
 	return NULL;
 }
 
-bool unlink_protocol(struct card *card, uint32_t pw, uint32_t type,
-		     struct dci_claim **c)
+static bool unlink_protocol(struct card *card, uint32_t pw, uint32_t type,
+			    struct dci_claim **c)
 {
 	while (*c)
 	{
@@ -326,7 +326,7 @@ bool unlink_protocol(struct card *card, uint32_t pw, uint32_t type,
 	return false;
 }
 
-void service_EnumerateNetworkDrivers(_kernel_swi_regs *r)
+static void service_EnumerateNetworkDrivers(_kernel_swi_regs *r)
 {
 	struct card *c = &card;
 	struct chaindib *chd = rma_alloc(sizeof(*chd));
@@ -335,7 +335,7 @@ void service_EnumerateNetworkDrivers(_kernel_swi_regs *r)
 	r->r[0] = (int)chd;
 }
 
-void service_DCIProtocolStatus(_kernel_swi_regs *r)
+static void service_DCIProtocolStatus(_kernel_swi_regs *r)
 {
 	struct card *c = &card;
 	if (r->r[2] == DCI_STATUS_TERMINATING) {
@@ -343,6 +343,18 @@ void service_DCIProtocolStatus(_kernel_swi_regs *r)
 		unlink_protocol(c, r->r[0], ANY_TYPE, &c->claims.normal);
 		unlink_protocol(c, r->r[0], ANY_TYPE, &c->claims.sink);
 		unlink_protocol(c, r->r[0], ANY_TYPE, &c->claims.monitor);
+	}
+}
+
+static void service_MbufManagerStatus(_kernel_swi_regs *r)
+{
+	struct card *c = &card;
+	if (r->r[0] == MbufManagerStatus_Started
+	    && !c->mb.open)
+	{
+		open_mbufmanager(c);
+		if (c->mb.open)
+			start_card(c);
 	}
 }
 
@@ -356,6 +368,10 @@ void service(int service_number, _kernel_swi_regs *r, void *priv)
 
 	case Service_DCIProtocolStatus:
 		service_DCIProtocolStatus(r);
+		break;
+
+	case Service_MbufManagerStatus:
+		service_MbufManagerStatus(r);
 		break;
 	}
 }
