@@ -40,8 +40,8 @@ _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 		r.r[6] = 0x20;
 		r.r[7] = (int)&IDEReadSector;
 		r.r[8] = (int)&IDEWriteSector;
-		_kernel_swi(XOS_Bit | ADFS_SetIDEController, &r, &r);
-		card->claimed = 1;
+		if (_kernel_swi(XOS_Bit | ADFS_SetIDEController, &r, &r) == 0)
+			card->claimed = 1;
 	}
 	return NULL;
 }

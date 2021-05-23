@@ -32,8 +32,6 @@ data += int24(0x3c00)
 
 assert(len(data) == 16)
 
-chunks = []
-
 class Chunk:
     def __init__(self, osid, type):
         self.id = ((osid | 8) << 4) | type
@@ -53,20 +51,50 @@ class StringChunk(Chunk):
         Chunk.__init__(self, 7, type)
         self.data = bytearray(s + "\000")
 
+class LoaderChunk(Chunk):
+    def __init__(self, filename):
+        Chunk.__init__(self, 0, 0)
+        f = open(filename, "rb")
+        self.data = bytearray(f.read())
+        f.close()
+
+class ModuleChunk(Chunk):
+    def __init__(self, filename):
+        Chunk.__init__(self, 0, 1)
+        f = open(filename, "rb")
+        self.data = bytearray(f.read())
+        f.close()
+
+def WriteChunkDirectoryAt(start, chunks):
+    data = bytearray()
+    address = start + (8 * len(chunks)) + 4
+    for c in chunks:
+        size = c.GetSize()
+        data.append(c.GetID())
+        data += int24(size)
+        data += int32(address)
+        address += size
+
+    data += int32(0)
+
+    for c in chunks:
+        data += c.GetData()
+
+    return data
+
+# first chunk directory in podule space
+chunks = []
 chunks.append(StringChunk(5, "EtherZ (c) 2021 Phil Blundell"))
-        
-address = 16 + (8 * len(chunks)) + 4
+chunks.append(LoaderChunk("loader.bin"))
+data += WriteChunkDirectoryAt(16, chunks)
 
-for c in chunks:
-    size = c.GetSize()
-    data.append(c.GetID())
-    data += int24(size)
-    data += int32(address)
-    address += size
+# pad to page boundary
+data += bytearray(0x800 - len(data))
 
-data += int32(0)
-
-for c in chunks:
-    data += c.GetData()
+# second chunk directory in code space
+chunks = []
+chunks.append(ModuleChunk("EtherZ/EtherZ,ffa"))
+chunks.append(ModuleChunk("IDEWedge/IDEWedge,ffa"))
+data += WriteChunkDirectoryAt(0, chunks)
 
 sys.stdout.write(data)
