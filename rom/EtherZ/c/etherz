@@ -79,6 +79,9 @@ static struct card card;
 
 #define ETH_IRQ_BIT 0x40
 
+#define PodIRQBit          0x20        // mask bit in irqb mask reg
+#define PodIRQMaskAddress  0x3200028   // irqb mask reg address
+
 static void card_irq_on(struct card *c)
 {
 	*((volatile uint8_t *)c->irq_mask) |= ETH_IRQ_BIT;
@@ -98,6 +101,7 @@ static void *rma_alloc(size_t size)
 	return (void *)r.r[2];
 }
 
+#if 0
 static void rma_free(void *ptr)
 {
 	_kernel_swi_regs r;
@@ -105,6 +109,7 @@ static void rma_free(void *ptr)
 	r.r[2] = (int)ptr;
 	_kernel_swi(XOS_Bit | OS_Module, &r, &r);
 }
+#endif
 
 static void kick_transmitter(struct card *c)
 {
@@ -172,6 +177,16 @@ void dci_starting_veneer_handler(void)
 	SendDCIDriverStatus(c, DCI_STATUS_STARTING);
 }
 
+static void start_card(struct card *c)
+{
+	ksz8851_init_hardware(&c->ctrl);
+	ksz8851_set_mac(&c->ctrl, &c->hw_addr[0]);
+
+	card_irq_on(c);
+
+	*((volatile uint8_t *)PodIRQMaskAddress) |= PodIRQBit;
+}
+
 void open_mbufmanager(struct card *c)
 {
 	_kernel_swi_regs r ;
@@ -212,9 +227,6 @@ static void fill_regs_for_irq(_kernel_swi_regs *r, void *priv)
 	r->r[4] = ETH_IRQ_BIT;
 }
 
-#define PodIRQBit          0x20        // mask bit in irqb mask reg
-#define PodIRQMaskAddress  0x3200028   // irqb mask reg address
-
 _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 {
 	struct card *c = &card;
@@ -251,12 +263,9 @@ _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 
 	open_mbufmanager(c);
 
-	ksz8851_init_hardware(&c->ctrl);
-	ksz8851_set_mac(&c->ctrl, &c->hw_addr[0]);
-
-	card_irq_on(c);
-
-	*((volatile uint8_t *)PodIRQMaskAddress) |= PodIRQBit;
+	if (c->mb.open) {
+		start_card(c);
+	}
 
 	return NULL;
 }
@@ -601,11 +610,11 @@ _kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
 		r->r[2] = INQUIRE_FLAGS;
 		break;
 
-	case 2: /* GetNetworkMTU */
+	case DCI4GetNetworkMTU:
 		r->r[2] = 1500;
 		break;
 
-	case 3: /* SetNetworkMTU */
+	case DCI4SetNetworkMTU:
 		if (r->r[2] != 1500) {
 			return &bad_mtu;
 		}
@@ -617,7 +626,7 @@ _kernel_oserror *swi(int swi_no, _kernel_swi_regs *r, void *priv)
 	case DCI4Filter:
 		return do_filter(c, r);
 
-	case 6: /* Stats */
+	case DCI4Stats:
 		break;
 
 	case 7: /* MulticastRequest */
