@@ -79,14 +79,14 @@
 #define ISR_RXIS 0x2000
 #define RXFCTR 0x9c
 #define CIDER 0xc0
+#define IACR 0xc8
+#define IADLR 0xd0
+#define IADHR 0xd2
+#define P1SR 0xf8
 
 #define RXQCR_VAL	(RXQCR_ADRFE | RXQCR_RXFCTE)
 #define TXCR_VAL	(TXCR_TXFCE | TXCR_TXPE | TXCR_TXCE | TXCR_TXE)
-#if 1
 #define RXCR1_VAL	(RXCR1_RXFCE | RXCR1_RXE | RXCR1_RXUE | RXCR1_RXBE | RXCR1_RXME | RXCR1_RXPAFMA)
-#else
-#define RXCR1_VAL	(RXCR1_RXFCE | RXCR1_RXE | RXCR1_RXAE | 0x2)
-#endif
 #define RXFDPR_VAL	(RXFDPR_RXFPAI)
 #define RXCR2_VAL	(RXCR2_IUFFP | RXCR2_RXIUFCEZ | RXCR2_UDPLFE)
 
@@ -132,14 +132,14 @@ void ksz8851_enable_dma(struct ksz8851 *dev)
 void ksz8851_xmit_frame(struct ksz8851 *dev, struct mbuf *mb, size_t length)
 {
 	uint16_t cw = TXIC | dev->frame_id;
-	
+
 	dev->frame_id = (dev->frame_id + 1) & 0x3f;
 
 	ksz8851_enable_dma(dev);
-	
+
 	load_data16(dev, cw);
 	load_data16(dev, length);
-	
+
 	while (mb)
 	{
 		uint8_t *p = (uint8_t *)mb + mb->m_off;
@@ -157,9 +157,9 @@ void ksz8851_xmit_frame(struct ksz8851 *dev, struct mbuf *mb, size_t length)
 
 void ksz8851_set_mac(struct ksz8851 *dev, uint8_t *mac)
 {
-	ksz8851_write_reg16(dev, MARH, mac[1] | (mac[0] << 8));	
-	ksz8851_write_reg16(dev, MARM, mac[3] | (mac[2] << 8));	
-	ksz8851_write_reg16(dev, MARL, mac[5] | (mac[4] << 8));	
+	ksz8851_write_reg16(dev, MARH, mac[1] | (mac[0] << 8));
+	ksz8851_write_reg16(dev, MARM, mac[3] | (mac[2] << 8));
+	ksz8851_write_reg16(dev, MARL, mac[5] | (mac[4] << 8));
 }
 
 void ksz8851_init_hardware(struct ksz8851 *dev)
@@ -167,7 +167,7 @@ void ksz8851_init_hardware(struct ksz8851 *dev)
 	ksz8851_write_reg16(dev, 0x26, 1);
 	ksz8851_write_reg16(dev, 0x26, 0);
 	ksz8851_write_reg16(dev, TXCR, TXCR_FTXQ);
-	ksz8851_write_reg16(dev, RXCR1, RXCR1_FRXQ);	
+	ksz8851_write_reg16(dev, RXCR1, RXCR1_FRXQ);
 	ksz8851_write_reg16(dev, TXCR, TXCR_VAL);
 	ksz8851_write_reg16(dev, RXCR1, RXCR1_VAL);
 	ksz8851_write_reg16(dev, RXCR2, RXCR2_VAL);
@@ -197,9 +197,10 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			struct mbuf *hmb = etherz_alloc_mbuf(sizeof(RxHdr));
 			struct mbuf *mb;
 			uint8_t *p;
-			RxHdr *rxh = (RxHdr *)((uint8_t *)hmb + hmb->m_off);
+			RxHdr *rxh;
 			size_t this_mbuf;
-			
+
+			rxh = (RxHdr *)((uint8_t *)hmb + hmb->m_off);
 			memset(rxh, 0, sizeof(rxh));
 			ksz8851_write_reg16(dev, RXFDPR, RXFDPR_VAL);
 			hmb->m_len = sizeof(rxh);
@@ -207,11 +208,11 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			hmb->m_list = NULL;
 			ksz8851_enable_dma(dev);
 			/* Throw away four useless bytes */
-			GET_DATA(dev);
-			GET_DATA(dev);
-			GET_DATA(dev);
-			GET_DATA(dev);
-			GET_DATA(dev);
+			(void)GET_DATA(dev);
+			(void)GET_DATA(dev);
+			(void)GET_DATA(dev);
+			(void)GET_DATA(dev);
+			(void)GET_DATA(dev);
 			/* Destination hwaddr */
 			p = &rxh->rx_dst_addr[0];
 			for (i = 0; i < 6; i++)
@@ -253,7 +254,7 @@ void ksz8851_interrupt(struct ksz8851 *dev)
 {
 	uint16_t stat = ksz8851_read_reg16(dev, ISR);
 	ksz8851_write_reg16(dev, ISR, stat);
-	
+
 	if (stat & ISR_RXIS)
 	{
 		ksz8851_unload_rx(dev);
@@ -264,3 +265,18 @@ void ksz8851_interrupt(struct ksz8851 *dev)
 		etherz_tx_complete();
 	}
 }
+
+uint32_t ksz8851_read_mib(struct ksz8851 *dev, uint8_t addr)
+{
+	uint32_t r;
+	ksz8851_write_reg16(dev, IACR, addr);
+	r = (uint32_t)ksz8851_read_reg16(dev, IADHR) << 16;
+	r |= ksz8851_read_reg16(dev, IADLR);
+	return r;
+}
+
+uint16_t ksz8851_get_phy_stat(struct ksz8851 *dev)
+{
+	return ksz8851_read_reg16(dev, P1SR);
+}
+

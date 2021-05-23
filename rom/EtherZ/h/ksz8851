@@ -17,4 +17,15 @@ extern void ksz8851_init_hardware(struct ksz8851 *dev);
 extern void ksz8851_interrupt(struct ksz8851 *dev);
 extern void ksz8851_set_mac(struct ksz8851 *dev, uint8_t *mac);
 
+extern uint32_t ksz8851_read_mib(struct ksz8851 *dev, uint8_t addr);
+
+#define PHY_STAT_REVERSED (1<<13)
+#define PHY_STAT_100MBPS (1<<10)
+#define PHY_STAT_DUPLEX (1<<9)
+#define PHY_STAT_MDIX (1<<7)
+#define PHY_STAT_AUTONEG (1<<6)
+#define PHY_STAT_GOOD (1<<5)
+
+extern uint16_t ksz8851_get_phy_stat(struct ksz8851 *dev);
+
 #endif
