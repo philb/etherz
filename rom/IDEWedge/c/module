@@ -5,7 +5,7 @@
 
 struct card
 {
-	void *ide_base;		// Must be first, code in transfer.s uses this
+	void *ide_base;
 	void *irq_status_reg;
 	void *irq_mask_reg;
 	void *reset_reg;

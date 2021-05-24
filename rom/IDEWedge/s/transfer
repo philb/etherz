@@ -1,9 +1,5 @@
 	AREA    |C$$code|,CODE,READONLY
 
-	IMPORT card
-
-card_ptr       &	card
-
 ;
 ; Reads up to a sector of data from IDE to RAM.
 ;
