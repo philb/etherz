@@ -21,6 +21,17 @@ struct card *card;
 extern void IDEReadSector(void);
 extern void IDEWriteSector(void);
 
+static void fill_regs_for_controller(struct card *card, _kernel_swi_regs *r)
+{
+	r->r[2] = (int)card->ide_base;
+	r->r[3] = (int)card->irq_status_reg;
+	r->r[4] = 0x20;
+	r->r[5] = (int)card->irq_mask_reg;
+	r->r[6] = 0x20;
+	r->r[7] = (int)&IDEReadSector;
+	r->r[8] = (int)&IDEWriteSector;
+}
+
 _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 {
 	int card_base = 0x3344000;
@@ -33,13 +44,7 @@ _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 
 	{
 		_kernel_swi_regs r;
-		r.r[2] = (int)card->ide_base;
-		r.r[3] = (int)card->irq_status_reg;
-		r.r[4] = 0x20;
-		r.r[5] = (int)card->irq_mask_reg;
-		r.r[6] = 0x20;
-		r.r[7] = (int)&IDEReadSector;
-		r.r[8] = (int)&IDEWriteSector;
+		fill_regs_for_controller(card, &r);
 		if (_kernel_swi(XOS_Bit | ADFS_SetIDEController, &r, &r) == 0)
 			card->claimed = 1;
 	}
@@ -54,6 +59,8 @@ _kernel_oserror *finalise(int fatal, int podule, void *priv)
 		r.r[1] = Service_ADFSPoduleIDEDying;
 		_kernel_swi(XOS_Bit | OS_ServiceCall, &r, &r);
 	}
+
+	*((unsigned char *)card->irq_mask_reg) = 0;
 
 	free(card);
 	return NULL;
@@ -121,14 +128,8 @@ void service(int service_number, _kernel_swi_regs *r, void *priv)
 		  R7 	Address of data read routine for current disc controller (0 for default)
 		  R8 	Address of write read routine for current disc controller (0 for default)
 		*/
+		fill_regs_for_controller(card, r);
 		r->r[1] = 0;
-		r->r[2] = (int)card->ide_base;
-		r->r[3] = (int)card->irq_status_reg;
-		r->r[4] = 0x20;
-		r->r[5] = (int)card->irq_mask_reg;
-		r->r[6] = 0x20;
-		r->r[7] = (int)&IDEReadSector;
-		r->r[8] = (int)&IDEWriteSector;
 		card->claimed = 1;
 		break;
 		
