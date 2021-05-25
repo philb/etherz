@@ -43,6 +43,7 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
    wire [7:0] 	sector_ram_wa;
 
    reg 		wrote_command;
+   reg 		read_data;
    reg 		mcu_irq;
    reg 		write_cmd_pending;
 
@@ -71,7 +72,7 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
 		     (reg_a == 4'b0110) ? dhr :
 		     (reg_a == 4'b1111) ? drive_addr :
 		     status;
-   assign cs2_dout = bsy ? 8'hb5 : hidata[7:0];
+   assign cs2_dout = hidata[7:0];
    assign d = (cs1 && re) ? (cs1_dout) : ((cs2 && re) ? (cs2_dout) : 8'bzzzzzzzz);
 
    SB_RAM256x16 sector_ram (.RDATA (sector_ram_dout),
@@ -126,6 +127,7 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
 	     host_state <= IDLE;
 	     hidata <= 8'h50;
 	     wrote_command <= 1'b0;
+	     read_data <= 1'b0;
 	     mcu_irq <= 1'b0;
 	     host_irq <= 1'b0;
 	     host_irq_en <= 1'b0;
@@ -173,21 +175,11 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
 		 if (cs1 && !bsy && (re || we))
 		   begin
 		      wrote_command <= (we && (reg_a == 4'b0111));
+		      read_data <= (re && (reg_a == 4'b0000));
 		      host_state <= re ? R2 : W2;
 		      if (re)
 			begin
-			   if (reg_a == 4'b000)
-			     begin
-				hidata[7:0] <= sector_ram_dout[15:8];
-				if (sector_ram_a == 8'hff)
-				  begin
-				     drq <= 1'b0;
-				     mcu_irq <= more_reads_pending;
-				     bsy <= more_reads_pending;
-				  end
-				sector_ram_a <= sector_ram_a + 1;
-			     end
-			   else if (reg_a == 4'b0111)
+			   if (reg_a == 4'b0111)
 			     begin
 				// Reading status (not alt status) clears irq
 				host_irq <= 1'b0;
@@ -240,12 +232,24 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
 		 begin
 		    hidata <= d[7:0];
 		    host_state <= W3;
-		 end
+ 		 end
 
 	       R2:
 		 begin
 		    if (!re)
 		      begin
+			 if (read_data)
+			   begin
+			      hidata[7:0] <= sector_ram_dout[15:8];
+			      if (sector_ram_a == 8'hff)
+				begin
+				   drq <= 1'b0;
+				   mcu_irq <= more_reads_pending;
+				   bsy <= more_reads_pending;
+				end
+			      sector_ram_a <= sector_ram_a + 1;
+			   end // if (read_data)
+
 			 host_state <= IDLE;
 		      end
 		 end
