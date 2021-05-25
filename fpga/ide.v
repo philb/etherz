@@ -113,9 +113,9 @@ module ide(a, d, cs1, cs2, clk, host_irq_out, re, we, reset, mcu_ss1, mcu_ss2, m
 	if (reset)
 	  begin
 	     lba0 <= 8'b00000001;
-	     lba1 <= 8'b00000001;
-	     lba2 <= 8'b00000001;
-	     dhr <= 8'b10100001;
+	     lba1 <= 8'b00000000;
+	     lba2 <= 8'b00000000;
+	     dhr <= 8'b10100000;
 	     sector_count <= 8'b00000001;
 	     command <= 8'b00000000;
 	     bsy <= 1'b0;
