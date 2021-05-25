@@ -8,6 +8,9 @@
 #include "wdt.h"
 #include "pio.h"
 #include <string.h>
+#include <stdarg.h>
+
+#define VERBOSE 0
 
 static uint8_t fpga_image[] = {
 #include "fpga_image.h"
@@ -53,6 +56,60 @@ struct command_file {
 	uint8_t cyl_high;
 	uint8_t dhr;
 };
+
+#define TX_BUFFER_SIZE	1024
+
+static char tx_buffer[TX_BUFFER_SIZE];
+static volatile off_t tx_buffer_write, tx_buffer_read;
+static volatile bool uart_tx_active;
+
+#define NEXTP(x) ((x+1) % TX_BUFFER_SIZE)
+
+void UART1_Handler(void)
+{
+	UART1->UART_THR = tx_buffer[tx_buffer_read];
+	tx_buffer_read = NEXTP(tx_buffer_read);
+	if (tx_buffer_write == tx_buffer_read) {
+		uart_disable_interrupt(UART1, UART_IER_TXRDY);
+		uart_tx_active = false;
+	}
+}
+
+static void uart_kick(void)
+{
+	uart_enable_interrupt(UART1, UART_IER_TXRDY);
+	uart_tx_active = true;
+}
+
+static void uart_writec(char c)
+{
+	while (NEXTP(tx_buffer_write) == tx_buffer_read)
+		/* Buffer full, wait */
+		;
+	tx_buffer[tx_buffer_write] = c;
+	tx_buffer_write = NEXTP(tx_buffer_write);
+	cpu_irq_disable();
+	if (!uart_tx_active)
+		uart_kick();
+	cpu_irq_enable();
+}
+
+static void uart_write_buffer(const char *buf, size_t length)
+{
+	while (length--)
+		uart_writec(*(buf++));
+}
+
+static void uart_printf(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	size_t sz = 256;
+	char buf[sz];
+	size_t n = vsnprintf(buf, sz, fmt, ap);
+	uart_write_buffer(buf, n);
+	va_end(ap);
+}
 
 static void load_fpga(void)
 {
@@ -169,9 +226,6 @@ static void setup_emmc(void)
 
 	sd_mmc_init();
 	uint8_t r = sd_mmc_check(0);
-	debug_puts("SD ");
-	debug_put_hex(r);
-	debug_putc('\n');
 
 	capacity_mb = sd_mmc_get_capacity(0) / 1024;
 	uint8_t *cid = sd_mmc_get_cid(0);
@@ -179,6 +233,42 @@ static void setup_emmc(void)
 	memcpy(card_psn, cid+10, 4);
 	memcpy(card_pnm, cid+3, 6);
 	card_pnm[6] = 0;
+}
+
+static void get_command_file(uint8_t *rbuf)
+{
+	Pdc *pdc = spi_get_pdc_base(SPI);
+
+	uint8_t tbuf[8];
+	memset(tbuf, 0, sizeof(tbuf));
+	memset(rbuf, 0xff, 8);
+
+	pio_disable_interrupt(PIOA, PIO_PA5);
+
+	ioport_set_pin_level(FPGA_SS_GPIO, IOPORT_PIN_LEVEL_LOW);
+
+	spi_get(SPI);
+
+	pdc_packet_t pdc_spi_packet;
+
+	pdc_spi_packet.ul_addr = (uint32_t)rbuf;
+	pdc_spi_packet.ul_size = 8;
+	pdc_rx_init(pdc, &pdc_spi_packet, NULL);
+
+	pdc_spi_packet.ul_addr = (uint32_t)tbuf;
+	pdc_spi_packet.ul_size = sizeof(tbuf);
+	pdc_tx_init(pdc, &pdc_spi_packet, NULL);
+
+	/* Enable the RX and TX PDC transfer requests */
+	pdc_enable_transfer(pdc, PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);
+
+	/* Waiting transfer done*/
+	while (pdc_read_rx_counter(pdc) != 0);
+
+	/* Disable the RX and TX PDC transfer requests */
+	pdc_disable_transfer(pdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);
+
+	ioport_set_pin_level(FPGA_SS_GPIO, IOPORT_PIN_LEVEL_HIGH);
 }
 
 static int debug_put(void volatile *x, char c)
@@ -189,6 +279,15 @@ static int debug_put(void volatile *x, char c)
 
 static void finish_ide_command(void)
 {
+#if VERBOSE
+	uint8_t rbuf[8];
+	get_command_file(rbuf);
+	uart_printf(" : %02x %02x %02x %02x %02x %02x %02x %02x\r\n",
+		    rbuf[0], rbuf[1], rbuf[2], rbuf[3],
+		    rbuf[4], rbuf[5], rbuf[6], rbuf[7]);
+#else
+	uart_printf("\r\n");
+#endif
 	pio_enable_interrupt(PIOA, PIO_PA5);
 }
 
@@ -210,11 +309,11 @@ static void fill_status_buffer(uint8_t *tbuf, struct command_file *cf, bool drq,
 	tbuf[5] = error;
 	tbuf[6] = (more_writes ? 1 : 0) | (more_reads ? 2 : 0);
 	tbuf[7] = DRDY_BIT | HOST_IRQ_BIT | (drq ? DRQ_BIT : 0) | (error ? ERR_BIT : 0);
-#if 0
-	debug_putc('R');
-	debug_put_hex(tbuf[4]);
-	debug_put_hex(tbuf[7]);
-	debug_putc('\n');
+#if VERBOSE
+	uart_printf("-> [%02x %02x %02x %02x %02x %02x %02x %02x] %d/%d/%d %s%s%s",
+		    tbuf[0], tbuf[1], tbuf[2], tbuf[3], tbuf[4], tbuf[5], tbuf[6], tbuf[7],
+		    cf->sector_nr, (cf->cyl_low | (cf->cyl_high << 8)), cf->dhr & 15,
+		    drq ? "DRQ " : "", error ? "ERR " : "", (more_reads | more_writes) ? "more " : "");
 #endif
 }
 
@@ -334,15 +433,16 @@ static void unpack_command(struct command_file *cf, uint8_t *cmd)
 
 static uint32_t get_sector(struct command_file *cf)
 {
-	return cf->sector_nr | (cf->cyl_low << 8) | (cf->cyl_high << 16) | ((cf->dhr & 0xf) << 24);
+	return (cf->sector_nr - 1) + 255 * ((cf->dhr & 0xf) | (cf->cyl_low << 4) | (cf->cyl_high << 12));
 }
 
 static void update_sector_address(struct command_file *cf, uint32_t new_addr)
 {
-	cf->sector_nr = (new_addr & 0xff);
-	cf->cyl_low = (new_addr & 0xff00) >> 8;
-	cf->cyl_high = (new_addr & 0xff0000) >> 16;
-	cf->dhr = cf->dhr & 0xf0 | (new_addr & 0x0f000000) >> 24;
+	int track = (new_addr / 255);
+	cf->sector_nr = (new_addr % 255) + 1;
+	cf->dhr = (cf->dhr & 0xf0) | (track & 0xf);
+	cf->cyl_low = (track & 0xff0) >> 4;
+	cf->cyl_high = (track & 0xff000) >> 12;
 }
 
 static int get_sector_count(struct command_file *cf)
@@ -362,12 +462,8 @@ static void start_ide_command(uint8_t *cmd)
 	  cmd[7] = features
 	*/
 
-#if 0
-	debug_puts("Cmd ");
-	debug_put_hex(cmd[0]);
-	debug_putc(' ');
-	debug_put_hex(cmd[1]);
-	debug_putc('\n');
+#if VERBOSE
+	uart_printf("[%02x %02x] ", cmd[0], cmd[1]);
 #endif
 
 	struct command_file cf;
@@ -397,18 +493,7 @@ static void start_ide_command(uint8_t *cmd)
 	if (cmd[1] == 0x30 || cmd[1] == 0x31) {
 		// Write sectors
 		fill_sector_buffer();
-#if 0
-		debug_putc('W');
-		debug_put_hex(sector_count);
-		debug_putc('@');
-		debug_put_hex(sector_address >> 24);
-		debug_put_hex(sector_address >> 16);
-		debug_put_hex(sector_address >> 8);
-		debug_put_hex(sector_address >> 0);
-		debug_putc('=');
-		for (int i = 0; i < 16; i++)
-			debug_put_hex(sector_buffer[i]);
-#endif
+		uart_printf("WS %d@%x ", sector_count, sector_address);
 		sd_mmc_err_t err;
 		err = sd_mmc_init_write_blocks(0, sector_address, 1);
 		if (err == SD_MMC_OK)
@@ -430,15 +515,7 @@ static void start_ide_command(uint8_t *cmd)
 
 	if (cmd[1] == 0x20) {
 		// Read sectors from the card
-#if 0
-		debug_puts("RS ");
-		debug_put_hex(sector_count);
-		debug_putc('@');
-		debug_put_hex((sector_address >> 24) & 0xff);
-		debug_put_hex((sector_address >> 16) & 0xff);
-		debug_put_hex((sector_address >> 8) & 0xff);
-		debug_put_hex(sector_address & 0xff);
-#endif
+		uart_printf("RS %d@%x ", sector_count, sector_address);
 		sd_mmc_err_t err;
 		err = sd_mmc_init_read_blocks(0, sector_address, 1);
 		if (err == SD_MMC_OK)
@@ -477,71 +554,33 @@ static void start_ide_command(uint8_t *cmd)
 		return;
 	}
 
-	debug_puts("Cmd ");
-	debug_put_hex(cmd[0]);
-	debug_putc(' ');
-	debug_put_hex(cmd[1]);
-	debug_putc(' ');
-	debug_put_hex(cmd[2]);
-	debug_putc(' ');
-	debug_put_hex(cmd[3]);
-	debug_putc(' ');
-	debug_put_hex(cmd[4]);
-	debug_putc(' ');
-	debug_put_hex(cmd[5]);
-	debug_putc(' ');
-	debug_put_hex(cmd[6]);
-	debug_putc(' ');
-	debug_put_hex(cmd[7]);
-	debug_putc('\n');
+	uart_printf("Unknown cmd %02x %02x %02x %02x %02x %02x %02x %02x\r\n",
+		    cmd[0], cmd[1], cmd[2], cmd[3], cmd[4], cmd[5], cmd[6], cmd[7]);
 	return_status(&cf, false, 1 << 2, false, false);
 	finish_ide_command();
 }
 
 static void fpga_irq_handler(uint32_t id, uint32_t mask)
 {
-	Pdc *pdc = spi_get_pdc_base(SPI);
-
-	uint8_t tbuf[8], rbuf[8];
-	memset(tbuf, 0, sizeof(tbuf));
-	memset(rbuf, 0xff, sizeof(rbuf));
-
-	pio_disable_interrupt(PIOA, PIO_PA5);
-
-	ioport_set_pin_level(FPGA_SS_GPIO, IOPORT_PIN_LEVEL_LOW);
-
-	spi_get(SPI);
-
-	pdc_packet_t pdc_spi_packet;
-
-	pdc_spi_packet.ul_addr = (uint32_t)rbuf;
-	pdc_spi_packet.ul_size = sizeof(rbuf);
-	pdc_rx_init(pdc, &pdc_spi_packet, NULL);
-
-	pdc_spi_packet.ul_addr = (uint32_t)tbuf;
-	pdc_spi_packet.ul_size = sizeof(tbuf);
-	pdc_tx_init(pdc, &pdc_spi_packet, NULL);
-
-	/* Enable the RX and TX PDC transfer requests */
-	pdc_enable_transfer(pdc, PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);
-
-	/* Waiting transfer done*/
-	while (pdc_read_rx_counter(pdc) != 0);
-
-	/* Disable the RX and TX PDC transfer requests */
-	pdc_disable_transfer(pdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);
-
-	ioport_set_pin_level(FPGA_SS_GPIO, IOPORT_PIN_LEVEL_HIGH);
-
-#if 0
-	for (int i = 0; i < sizeof(rbuf); i++) {
-		debug_put_hex(rbuf[i]);
-		debug_putc(' ');
-	}
-	debug_putc('\n');
-#endif
-
+	uint8_t rbuf[8];
+	get_command_file(rbuf);
 	start_ide_command(rbuf);
+}
+
+static void board_uart_init(void)
+{
+	Uart *uart = UART1;
+	struct sam_uart_opt opt = {
+	ul_mck: (BOARD_FREQ_MAINCK_XTAL * CONFIG_PLL0_MUL) / (CONFIG_PLL0_DIV * 2),
+	ul_baudrate: 115200,
+	ul_mode: UART_MR_PAR_NO
+	};
+	pmc_enable_periph_clk(ID_UART1);
+	uart_init(uart, &opt);
+	ioport_set_pin_mode(PIO_PB2_IDX, IOPORT_MODE_MUX_A);
+	ioport_disable_pin(PIO_PB2_IDX);
+	ioport_set_pin_mode(PIO_PB3_IDX, IOPORT_MODE_MUX_A);
+	ioport_disable_pin(PIO_PB3_IDX);
 }
 
 int main(void)
@@ -550,6 +589,9 @@ int main(void)
 
 	sysclk_init();
 	ioport_init();
+
+	board_uart_init();
+
 	load_fpga();
 
 	setup_emmc();
@@ -563,11 +605,17 @@ int main(void)
 	ioport_enable_pin(FPGA_SS2_GPIO);
 	ioport_set_pin_level(FPGA_SS2_GPIO, IOPORT_PIN_LEVEL_HIGH);
 
+	NVIC_SetPriority(PIOA_IRQn, 4);
+	NVIC_SetPriority(UART1_IRQn, 2);
+
 	NVIC_EnableIRQ(PIOA_IRQn);
 	pio_handler_set(PIOA, ID_PIOA, PIO_PA5, PIO_IT_RISE_EDGE, fpga_irq_handler);
 	pio_enable_interrupt(PIOA, PIO_PA5);
 	ioport_enable_pin(PIO_PA5_IDX);
 	wdt_disable(WDT);
+
+	NVIC_EnableIRQ(UART1_IRQn);
+	uart_printf("Ready\r\n");
 
 	for (;;)
 		;
