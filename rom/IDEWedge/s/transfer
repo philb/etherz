@@ -181,6 +181,8 @@ write_loop
 	bne write_loop
 	ldmfd sp!, {r2-r10, pc}^
 	|
+	cmp r0, #512
+	movlt r0, #512
 write_loop
 	cmp r0, #2
 	ldmltfd sp!, {r2-r10, pc}^
