@@ -33,9 +33,9 @@ DATA_HI * 0x2800
 	ldrb r4, [r10, #DATA_HI - DATA_LO]
 	orr r3, r3, r4, lsl #8
 	ldrb r4, [r10, #DATA_LO - DATA_LO]
-	orr r3, r3, r4, lsl #8
+	orr r3, r3, r4, lsl #16
 	ldrb r4, [r10, #DATA_HI - DATA_LO]
-	orr r3, r3, r4, lsl #8
+	orr r3, r3, r4, lsl #24
 	str r3, [r1], #4
 	MEND
 
@@ -68,9 +68,9 @@ IDEReadSector
 	ldr r10, =0x3344000
 	]
 	add r10, r10, #DATA_LO
-	[ 0=1
+	[ 1=1
 	ands r2, r0, #0xf
-	beq aligned_read
+	beq read_loop
 	bic r2, r2, #1
 	eor r2, r2, #14
 	add pc, pc, r2, lsl #3
@@ -95,7 +95,6 @@ IDEReadSector
 	ReadWord
 	ReadWord
 	ReadWord
-aligned_read
 	bics r0, r0, #0xf
 	ldmeqfd sp!, {r2-r10, pc}^
 
