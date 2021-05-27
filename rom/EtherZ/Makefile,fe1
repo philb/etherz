@@ -37,3 +37,12 @@ o.etherz:	h.types
 o.etherz:	h.ksz8851
 o.etherz:	h.types
 o.etherz:	h.mbuf
+o.etherz:	c.etherz
+o.etherz:	C:h.swis
+o.etherz:	C:h.kernel
+o.etherz:	h.mbuf
+o.etherz:	h.dcistructs
+o.etherz:	h.types
+o.etherz:	h.ksz8851
+o.etherz:	h.types
+o.etherz:	h.mbuf

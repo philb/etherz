@@ -238,9 +238,89 @@ void interrupt_handler(_kernel_swi_regs *r, void *pw)
 	card_irq_on(c);
 }
 
+static _kernel_oserror no_hardware = { 0x50500, "EtherZ hardware not present" };
+
+static _kernel_oserror *read_mac_address(struct card *c)
+{
+	_kernel_swi_regs r;
+	_kernel_oserror *err;
+	int podule_nr = 1;
+	int desc_chunk = -1;
+	int addr_chunk = -1;
+	size_t desc_size = 0, addr_size = 0;
+	char *descp, *addrp;
+	bool desc_ok;
+	int n;
+	int a[6];
+
+	r.r[0] = 0;
+	r.r[3] = podule_nr;
+	do
+	{
+		int this_chunk = r.r[0];
+		err = _kernel_swi(XOS_Bit | Podule_EnumerateChunks, &r, &r);
+		if (err)
+			return err;
+		if (r.r[2] == 0xf7)
+		{
+			addr_chunk = this_chunk;
+			addr_size = r.r[1];
+		}
+		else if (r.r[2] == 0xf5)
+		{
+			desc_chunk = this_chunk;
+			desc_size = r.r[1];
+		}
+	} while (r.r[0] != 0 && (addr_chunk == -1 || desc_chunk == -1));
+
+	if (addr_chunk == -1 || desc_chunk == -1)
+		return &no_hardware;
+
+	descp = malloc(desc_size);
+	addrp = malloc(addr_size);
+
+	r.r[0] = addr_chunk;
+	r.r[2] = (int)addrp;
+	err = _kernel_swi(XOS_Bit | Podule_ReadChunk, &r, &r);
+	if (err)
+	{
+		free(descp);
+		free(addrp);
+		return err;
+	}
+
+	r.r[0] = desc_chunk;
+	r.r[2] = (int)descp;
+	err = _kernel_swi(XOS_Bit | Podule_ReadChunk, &r, &r);
+	if (err)
+	{
+		free(descp);
+		free(addrp);
+		return err;
+	}
+
+	desc_ok = !strncmp(descp, "EtherZ", 6);
+	/* Can't scanf directly into c->hw_addr[] because it writes ints not chars. */
+	n = sscanf(addrp, "%02x:%02x:%02x:%02x:%02x:%02x", &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]);
+	c->hw_addr[0] = a[0];
+	c->hw_addr[1] = a[1];
+	c->hw_addr[2] = a[2];
+	c->hw_addr[3] = a[3];
+	c->hw_addr[4] = a[4];
+	c->hw_addr[5] = a[5];
+	free(descp);
+	free(addrp);
+
+	if (!desc_ok || n != 6)
+		return &no_hardware;
+
+	return NULL;
+}
+
 _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 {
 	struct card *c = &card;
+	_kernel_oserror *err;
 
 	c->priv = priv;
 
@@ -253,12 +333,9 @@ _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 
 	c->ctrl.base = (char *)PODULE_BASE + KSZ8851_OFFSET;
 
-	c->hw_addr[0] = 0x20;
-	c->hw_addr[1] = 0x20;
-	c->hw_addr[2] = 0x20;
-	c->hw_addr[3] = 0x20;
-	c->hw_addr[4] = 0x20;
-	c->hw_addr[5] = 0x20;
+	err = read_mac_address(c);
+	if (err)
+		return err;
 
 	c->stats.st_interface_type = ST_TYPE_10BASET;
 
