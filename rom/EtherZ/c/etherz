@@ -66,6 +66,7 @@ struct card
 	struct tx_req *tx_queue, *tx_queue_end;
 	bool tx_busy;
 	void *irq_mask;
+	void *priv;
 
 	struct stats stats;
 
@@ -181,10 +182,25 @@ void dci_starting_veneer_handler(void)
 	SendDCIDriverStatus(c, DCI_STATUS_STARTING);
 }
 
+static void fill_regs_for_irq(_kernel_swi_regs *r, void *priv)
+{
+	r->r[0] = 13;
+	r->r[1] = (int)interrupt_veneer;
+	r->r[2] = (int)priv;
+	r->r[3] = PODULE_BASE + IRQSTATUS_OFFSET;
+	r->r[4] = ETH_IRQ_BIT;
+}
+
 static void start_card(struct card *c)
 {
 	ksz8851_init_hardware(&c->ctrl);
 	ksz8851_set_mac(&c->ctrl, &c->hw_addr[0]);
+
+	{
+		_kernel_swi_regs r;
+		fill_regs_for_irq(&r, c->priv);
+		_kernel_swi(OS_ClaimDeviceVector, &r, &r);
+	}
 
 	card_irq_on(c);
 
@@ -222,18 +238,11 @@ void interrupt_handler(_kernel_swi_regs *r, void *pw)
 	card_irq_on(c);
 }
 
-static void fill_regs_for_irq(_kernel_swi_regs *r, void *priv)
-{
-	r->r[0] = 13;
-	r->r[1] = (int)interrupt_veneer;
-	r->r[2] = (int)priv;
-	r->r[3] = PODULE_BASE + IRQSTATUS_OFFSET;
-	r->r[4] = ETH_IRQ_BIT;
-}
-
 _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 {
 	struct card *c = &card;
+
+	c->priv = priv;
 
 	c->dib.dib_swibase = SWI_BASE;
 	c->dib.dib_name = (unsigned char *)"ez";
@@ -262,12 +271,6 @@ _kernel_oserror *initialise(char *cmd_tail, int podule_base, void *priv)
 		_kernel_swi(OS_AddCallBack, &r, &r);
 	}
 
-	{
-		_kernel_swi_regs r;
-		fill_regs_for_irq(&r, priv);
-		_kernel_swi(OS_ClaimDeviceVector, &r, &r);
-	}
-
 	open_mbufmanager(c);
 
 	if (c->mb.open) {
@@ -284,12 +287,12 @@ _kernel_oserror *finalise(int fatal, int podule, void *priv)
 	card_irq_off(c);
 
 	if (c->mb.open)
-		close_mbufmanager(c);
-
 	{
 		_kernel_swi_regs r;
 		fill_regs_for_irq(&r, priv);
 		_kernel_swi(OS_ReleaseDeviceVector, &r, &r);
+
+		close_mbufmanager(c);
 	}
 
 	if (c->set_callback)
