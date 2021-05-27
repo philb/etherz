@@ -11,6 +11,9 @@
 #include <stdarg.h>
 
 #define VERBOSE 0
+#define SECTORS 64
+#define CYLINDERS 4096
+#define VERSION "0.2"
 
 static uint8_t fpga_image[] = {
 #include "fpga_image.h"
@@ -433,13 +436,13 @@ static void unpack_command(struct command_file *cf, uint8_t *cmd)
 
 static uint32_t get_sector(struct command_file *cf)
 {
-	return (cf->sector_nr - 1) + 255 * ((cf->dhr & 0xf) | (cf->cyl_low << 4) | (cf->cyl_high << 12));
+	return (cf->sector_nr - 1) + SECTORS * ((cf->dhr & 0xf) | (cf->cyl_low << 4) | (cf->cyl_high << 12));
 }
 
 static void update_sector_address(struct command_file *cf, uint32_t new_addr)
 {
-	int track = (new_addr / 255);
-	cf->sector_nr = (new_addr % 255) + 1;
+	int track = (new_addr / SECTORS);
+	cf->sector_nr = (new_addr % SECTORS) + 1;
 	cf->dhr = (cf->dhr & 0xf0) | (track & 0xf);
 	cf->cyl_low = (track & 0xff0) >> 4;
 	cf->cyl_high = (track & 0xff000) >> 12;
@@ -476,13 +479,14 @@ static void start_ide_command(uint8_t *cmd)
 		// Identify drive
 		memset(sector_buffer, 0, sizeof(sector_buffer));
 		sector_buffer[0<<1] = 0x80;
-		sector_buffer[1<<1] = 255;
+		sector_buffer[1<<1] = CYLINDERS & 0xff;
+		sector_buffer[(1<<1)+1] = CYLINDERS >> 8;
 		sector_buffer[3<<1] = 16;
-		sector_buffer[6<<1] = 255;
+		sector_buffer[6<<1] = SECTORS;
 		char s[20];
 		sprintf(s, "EtherZ eMMC %s", card_pnm);
 		swizzle_string(sector_buffer+(27<<1), s, 20);
-		swizzle_string(sector_buffer+(23<<1), "0.1", 8);
+		swizzle_string(sector_buffer+(23<<1), VERSION, 8);
 		sprintf(s, "%02x%02x%02x%02x", card_psn[0], card_psn[1], card_psn[2], card_psn[3]);
 		swizzle_string(sector_buffer+(10<<1), s, 20);
 		return_sector_buffer(&cf, 0, false);
