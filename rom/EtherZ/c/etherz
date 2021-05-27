@@ -562,6 +562,36 @@ static struct dci_claim *new_claim(uint8_t address_level, uint8_t error_level,
 	return c;
 }
 
+static void free_claim(struct dci_claim **claim)
+{
+	struct dci_claim *next = (*claim)->next;
+	free(*claim);
+	*claim = next;
+}
+
+static _kernel_oserror *free_normal_claim(struct card *c,
+					  uint8_t address_level,
+					  uint8_t error_level,
+					  uint32_t pw, void *handler,
+					  uint16_t type)
+{
+	struct dci_claim **claim = &c->claims.normal;
+	while (*claim)
+	{
+		struct dci_claim *t = *claim;
+		if (t->type == type && t->handler == handler
+		    && t->pw == pw && t->address_level == address_level
+		    && t->error_level == error_level)
+		{
+			*claim = t->next;
+			free(t);
+			return NULL;
+		}
+		claim = &((*claim)->next);
+	}
+	return &bad_claim;
+}
+
 static _kernel_oserror *do_filter(struct card *c, _kernel_swi_regs *r)
 {
 	uint16_t level;
@@ -625,6 +655,30 @@ static _kernel_oserror *do_filter(struct card *c, _kernel_swi_regs *r)
 		/* Freeing a claim */
 		switch (level)
 		{
+		case FRMLVL_E2SINK:
+			if (!c->claims.sink
+			    || c->claims.sink->pw != r->r[5])
+				return &bad_release;
+			free_claim(&c->claims.sink);
+			break;
+		case FRMLVL_E2MONITOR:
+			if (!c->claims.monitor
+			    || c->claims.monitor->pw != r->r[5])
+				return &bad_release;
+			free_claim(&c->claims.monitor);
+			break;
+		case FRMLVL_IEEE:
+			if (!c->claims.ieee
+			    || c->claims.ieee->pw != r->r[5])
+				return &bad_release;
+			free_claim(&c->claims.ieee);
+			break;
+		case FRMLVL_E2SPECIFIC:
+			return free_normal_claim(c, r->r[3], r->r[4],
+						 r->r[5], (void *)r->r[6],
+						 type);
+		default:
+			return &bad_release;
 		}
 	}
 
