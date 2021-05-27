@@ -1,6 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import sys
+import random
 
 ptype = 3
 mfrid = 80
@@ -36,6 +37,7 @@ class Chunk:
     def __init__(self, osid, type):
         self.id = ((osid | 8) << 4) | type
         self.data = bytearray()
+        self.address = None
         
     def GetSize(self):
         return len(self.data)
@@ -46,10 +48,13 @@ class Chunk:
     def GetData(self):
         return self.data
 
+    def GetAddress(self):
+        return self.address
+
 class StringChunk(Chunk):
     def __init__(self, type, s):
         Chunk.__init__(self, 7, type)
-        self.data = bytearray(s + "\000")
+        self.data = bytearray(bytes(s + '\000', encoding='utf-8'))
 
 class LoaderChunk(Chunk):
     def __init__(self, filename):
@@ -65,6 +70,15 @@ class ModuleChunk(Chunk):
         self.data = bytearray(f.read())
         f.close()
 
+class DirectoryChunk(Chunk):
+    def __init__(self, address, nchunks):
+        Chunk.__init__(self, 7, 0)
+        self.address = address
+        self.size = (8 * nchunks) + 4
+
+    def GetSize(self):
+        return self.size
+
 def WriteChunkDirectoryAt(start, chunks):
     data = bytearray()
     address = start + (8 * len(chunks)) + 4
@@ -72,8 +86,12 @@ def WriteChunkDirectoryAt(start, chunks):
         size = c.GetSize()
         data.append(c.GetID())
         data += int24(size)
-        data += int32(address)
-        address += size
+        a = c.GetAddress()
+        if a != None:
+            data += int32(a)
+        else:
+            data += int32(address)
+            address += size
 
     data += int32(0)
 
@@ -82,9 +100,15 @@ def WriteChunkDirectoryAt(start, chunks):
 
     return data
 
+def MakeEthernetID():
+    ba = bytearray(random.randbytes(6))
+    ba[0] |= 0x2
+    return "%02x:%02x:%02x:%02x:%02x:%02x" % (ba[0], ba[1], ba[2], ba[3], ba[4], ba[5])
+
 # first chunk directory in podule space
 chunks = []
 chunks.append(StringChunk(5, "EtherZ (c) 2021 Phil Blundell"))
+chunks.append(StringChunk(7, MakeEthernetID()))
 chunks.append(LoaderChunk("loader.bin"))
 data += WriteChunkDirectoryAt(16, chunks)
 
@@ -97,4 +121,4 @@ chunks.append(ModuleChunk("EtherZ/EtherZ,ffa"))
 chunks.append(ModuleChunk("IDEWedge/IDEWedge,ffa"))
 data += WriteChunkDirectoryAt(0, chunks)
 
-sys.stdout.write(data)
+sys.stdout.buffer.write(data)
