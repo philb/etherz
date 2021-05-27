@@ -21,13 +21,11 @@ initialisation-code: initialise
 
 finalisation-code: finalise
 
-service-call-handler: service 0x11 0x27 0x53 0x9b 0x9e 0x9f 0xa2
+service-call-handler: service 0x9b 0x9f 0xa2
 
 command-keyword-table: cmd
   EZStats(min-args:0, max-args:0,
-      help-text: "Print extended statistics"),
-  EZRegTest(min-args:0, max-args: 0,
-      help-text: "Test register access")
+      help-text: "Print extended statistics")
 
 swi-chunk-base-number: 0x50500
 
