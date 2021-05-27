@@ -589,7 +589,9 @@ static void board_uart_init(void)
 
 int main(void)
 {
+#ifdef SWD_DEBUG
 	ptr_put = debug_put;
+#endif
 
 	sysclk_init();
 	ioport_init();
