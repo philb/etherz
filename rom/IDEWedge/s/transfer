@@ -68,7 +68,7 @@ IDEReadSector
 	ldr r10, =0x3344000
 	]
 	add r10, r10, #DATA_LO
-	[ 1=1
+	[ 0=1
 	ands r2, r0, #0xf
 	beq read_loop
 	bic r2, r2, #1
