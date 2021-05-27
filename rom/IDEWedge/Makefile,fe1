@@ -18,10 +18,11 @@ IDEWedge: o.modhdr o.module C:o.stubs o.transfer
 .cmhg.o:; cmhg -o $@ $<
 
 # Dynamic dependencies:
+o.module:	c.module
+o.module:	C:h.swis
+o.module:	C:h.kernel
+o.module:	c.module
+o.module:	C:h.swis
+o.module:	C:h.kernel
 o.transfer: s.transfer
-o.module:	c.module
-o.module:	C:h.swis
-o.module:	C:h.kernel
-o.module:	c.module
-o.module:	C:h.swis
-o.module:	C:h.kernel
+o.transfer: s.transfer
