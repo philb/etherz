@@ -1,21 +1,5 @@
 	AREA    |C$$code|,CODE,READONLY
 
-;
-; Reads up to a sector of data from IDE to RAM.
-;
-; Entry:
-;    R0 = length to transfer > 0
-;    R1 -> buffer
-;    LR = return address
-;    MODE: SVC
-;    IRQ state: undefined
-;
-; Exit:
-;    R0 undefined
-;    R1 updated
-;    All other registers and flags preserved
-;    IRQ state preserved but IRQs are enabled during call.
-
 DATA_LO * 0x2400
 DATA_HI * 0x2800
 
@@ -58,6 +42,22 @@ DATA_HI * 0x2800
 	mov r4, r3, lsr #16
 	strb r4, [r10, #DATA_LO - DATA_LO]	
 	MEND
+
+;
+; Reads up to a sector of data from IDE to RAM.
+;
+; Entry:
+;    R0 = length to transfer > 0
+;    R1 -> buffer
+;    LR = return address
+;    MODE: SVC
+;    IRQ state: undefined
+;
+; Exit:
+;    R0 undefined
+;    R1 updated
+;    All other registers and flags preserved
+;    IRQ state preserved but IRQs are enabled during call.
 
 	EXPORT IDEReadSector
 IDEReadSector
