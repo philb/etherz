@@ -4,14 +4,6 @@ DATA_LO * 0x2400
 DATA_HI * 0x2800
 
 	MACRO
-	ReadWord
-	ldrb r3, [r10, #DATA_LO - DATA_LO]
-	strb r3, [r1], #1
-	ldrb r3, [r10, #DATA_HI - DATA_LO]
-	strb r3, [r1], #1
-	MEND
-
-	MACRO
 	Read2Words
 	ldrb r3, [r10, #DATA_LO - DATA_LO]
 	ldrb r4, [r10, #DATA_HI - DATA_LO]
@@ -40,7 +32,7 @@ DATA_HI * 0x2800
 	mov r4, r3, lsr #24
 	strb r4, [r10, #DATA_HI - DATA_LO]
 	mov r4, r3, lsr #16
-	strb r4, [r10, #DATA_LO - DATA_LO]	
+	strb r4, [r10, #DATA_LO - DATA_LO]
 	MEND
 
 ;
@@ -61,61 +53,52 @@ DATA_HI * 0x2800
 
 	EXPORT IDEReadSector
 IDEReadSector
-	stmfd sp!, {r2-r10, r14}
-	[ 0=1
-	ldr r10, [r11]
-	|
-	ldr r10, =0x3344000
-	]
-	add r10, r10, #DATA_LO
-	[ 0=1
-	ands r2, r0, #0xf
-	beq read_loop
-	bic r2, r2, #1
-	eor r2, r2, #14
-	add pc, pc, r2, lsl #3
-	nop
-	nop
+	stmfd sp!, {r3, r4, r10, r14}
+	ldr r10, =0x3344000 + DATA_LO
 
-	ReadWord
-	ReadWord
-	ReadWord
-	ReadWord
+	teq r0, #0x200
+	bne SlowIDERead
 
-	ReadWord
-	ReadWord
-	ReadWord
-	ReadWord
-
-	ReadWord
-	ReadWord
-	ReadWord
-	ReadWord
-
-	ReadWord
-	ReadWord
-	ReadWord
-	bics r0, r0, #0xf
-	ldmeqfd sp!, {r2-r10, pc}^
-
-read_loop
+	; We are reading exactly one sector
+SectorReadLoop
 	Read2Words
 	Read2Words
 	Read2Words
 	Read2Words
-	
+
+	Read2Words
+	Read2Words
+	Read2Words
+	Read2Words
+	subs r0, r0, #32
+	bne SectorReadLoop
+	ldmfd sp!, {r3, r4, r10, pc}^
+
+	; Reading less than a whole sector
+	; Transfer size is guaranteed >0 and <512
+	; NOT guaranteed to be a whole number of words
+	; May be writing into application space so we must not overrun the output buffer
+SlowIDERead
+	cmp r0, #16	; at least 16 bytes to move?
+	blt ReadLT16
+	Read2Words
+	Read2Words
+	Read2Words
+	Read2Words
 	subs r0, r0, #16
-	bne read_loop
-	ldmfd sp!, {r2-r10, pc}^
-	|
-read_loop
-	cmp r0, #2
-	ldmltfd sp!, {r2-r10, pc}^
-	ReadWord
-	sub r0, r0, #2
-	b read_loop
-	]
-	
+	bne SlowIDERead
+	ldmfd sp!, {r3, r4, r10, pc}^
+
+ReadLT16		; 1-15 bytes to move
+	ldrb r3, [r10, #DATA_LO - DATA_LO]
+	strb r3, [r1], #1
+	subs r0, r0, #1
+	ldrneb r3, [r10, #DATA_HI - DATA_LO]
+	strneb r3, [r1], #1
+	subnes r0, r0, #1
+	bne ReadLT16
+	ldmfd sp!, {r3, r4, r10, pc}^
+
 ;
 ; Writes up to a sector of data from RAM to IDE.
 ;
@@ -176,7 +159,7 @@ write_loop
 	Write2Words
 	Write2Words
 	Write2Words
-	
+
 	subs r0, r0, #16
 	bne write_loop
 	ldmfd sp!, {r2-r10, pc}^
