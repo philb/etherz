@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <kernel.h>
 #include "swis.h"
 #include "mbuf.h"
 #include "dcistructs.h"
@@ -234,7 +235,9 @@ void interrupt_handler(_kernel_swi_regs *r, void *pw)
 	struct card *c = &card;
 	c->ext_stats.irqs++;
 	card_irq_off(c);
+	_kernel_irqs_on();
 	ksz8851_interrupt(&c->ctrl);
+	_kernel_irqs_off();
 	card_irq_on(c);
 }
 
