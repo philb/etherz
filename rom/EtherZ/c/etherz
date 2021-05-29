@@ -476,7 +476,7 @@ static _kernel_oserror bad_release = { 0x20e16, "Frame type not claimed" };
 struct mbuf *etherz_alloc_mbuf(size_t len)
 {
 	struct card *c = &card;
-	return c->mb.ctl.alloc_c(&c->mb.ctl, len, NULL);
+	return c->mb.ctl.alloc(&c->mb.ctl, len, NULL);
 }
 
 void etherz_free_mbuf(struct mbuf *mb)
