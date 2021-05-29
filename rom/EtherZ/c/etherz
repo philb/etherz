@@ -540,13 +540,20 @@ static _kernel_oserror *do_transmit(struct card *c, _kernel_swi_regs *r)
 	hp[12] = type >> 8;
 	hp[13] = type & 0xff;
 	hdr->m_len = 14;
-	hdr->m_next = mb;
-
 	tx = malloc(sizeof(*tx));
-	tx->chain = hdr;
 	tx->length = frame_size + 14;
 	tx->driver_frees_chain = (r->r[0] & TRANSMIT_FLAG_RETAIN) ? false : true;
 	tx->next = NULL;
+	tx->chain = hdr;
+
+	/* If the transmitter is already active, we need to be able to keep the mbuf. */
+	/* IRQs are still enabled here so we may race with the transmitter.  But this
+	   is safe because the only impact of the race is that we may ensure_safe when
+	   we didn't really need to. */
+	if (c->tx_busy)
+		mb = c->mb.ctl.ensure_safe(&c->mb.ctl, mb);
+
+	hdr->m_next = mb;
 
 	card_irq_off(c);
 	if (c->tx_queue_end)
