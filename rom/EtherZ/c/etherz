@@ -485,17 +485,6 @@ void etherz_free_mbuf(struct mbuf *mb)
 	c->mb.ctl.free(&c->mb.ctl, mb);
 }
 
-static size_t mbuf_chain_length(struct mbuf *mb)
-{
-	size_t length = 0;
-	while (mb)
-	{
-		length += mb->m_len;
-		mb = mb->m_next;
-	}
-	return length;
-}
-
 static _kernel_oserror *do_transmit(struct card *c, _kernel_swi_regs *r)
 {
 	uint16_t type = r->r[2];
@@ -516,7 +505,7 @@ static _kernel_oserror *do_transmit(struct card *c, _kernel_swi_regs *r)
 	if (r->r[0] & ~(TRANSMIT_FLAG_USE_SA | TRANSMIT_FLAG_RETAIN))
 		return &wrong_flags;
 
-	frame_size = mbuf_chain_length(mb);
+	frame_size = c->mb.ctl.count_bytes(&c->mb.ctl, mb);
 	if (frame_size > 1500)
 		return &frame_too_long;
 
