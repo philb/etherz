@@ -7,6 +7,7 @@
 #include "ksz8851.h"
 #include "etherz.h"
 #include "dcistructs.h"
+#include "mbuf.h"
 
 #define ADDR	0x200
 #define DATA	0x0
@@ -90,6 +91,9 @@
 #define RXFDPR_VAL	(RXFDPR_RXFPAI)
 #define RXCR2_VAL	(RXCR2_IUFFP | RXCR2_RXIUFCEZ | RXCR2_UDPLFE)
 
+extern void copy_out_mbuf(struct mbuf *, char *);
+extern void copy_in_mbuf(struct mbuf *, char *, size_t length);
+
 void ksz8851_write_reg16(struct ksz8851 *dev, uint8_t addr, uint16_t val)
 {
 	SET_ADDR(dev, addr);
@@ -140,16 +144,7 @@ void ksz8851_xmit_frame(struct ksz8851 *dev, struct mbuf *mb, size_t length)
 	load_data16(dev, cw);
 	load_data16(dev, length);
 
-	while (mb)
-	{
-		uint8_t *p = (uint8_t *)mb + mb->m_off;
-		size_t plen = mb->m_len;
-		while (plen--)
-		{
-			SET_DATA(dev, *(p++));
-		}
-		mb = mb->m_next;
-	}
+	copy_out_mbuf(mb, dev->base + DATA);
 
 	ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL);  /* dma mode off */
 	ksz8851_write_reg16(dev, TXQCR, TXQCR_METFE);
@@ -241,22 +236,7 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			mb->m_type = MT_DATA;
 			mb->m_list = NULL;
 			hmb->m_next = mb;
-			p = (uint8_t *)mb + mb->m_off;
-			this_mbuf = 0;
-			while (length--)
-			{
-				if (this_mbuf == mb->m_len)
-				{
-					mb = mb->m_next;
-					mb->m_type = MT_DATA;
-					mb->m_list = NULL;
-					p = (uint8_t *)mb + mb->m_off;
-					this_mbuf = 0;
-				}
-				*(p++) = GET_DATA(dev);
-				this_mbuf++;
-			}
-			mb->m_len = this_mbuf;
+			copy_in_mbuf(mb, dev->base + DATA, length);
 			ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);  /* dma mode off */
 			etherz_receive_frame(hmb);
 		}
@@ -292,4 +272,3 @@ uint16_t ksz8851_get_phy_stat(struct ksz8851 *dev)
 {
 	return ksz8851_read_reg16(dev, P1SR);
 }
-

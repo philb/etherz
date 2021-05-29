@@ -10,8 +10,8 @@ LibFileflags = -c -o $@
 Squeezeflags = -o $@
 
 # Final targets:
-EtherZ: o.modhdr o.etherz o.ksz8851 C:o.stubs o.call_handler
-        Link $(Linkflags) o.modhdr o.etherz o.ksz8851 C:o.stubs o.call_handler
+EtherZ: o.modhdr o.etherz o.ksz8851 C:o.stubs o.call_handler o.readwrite
+        Link $(Linkflags) o.modhdr o.etherz o.ksz8851 C:o.stubs o.call_handler o.readwrite
         
 .c.o:;  cc $(ccflags) -o $@ $<
 .s.o:;  objasm $(objasmflags) -from $< -to $@

@@ -1,0 +1,99 @@
+        AREA    |C$$code|,CODE,READONLY
+
+; R0 -> mbuf
+; R1 -> data register
+	EXPORT	copy_out_mbuf
+copy_out_mbuf	ROUT
+	LDR R2, [R0, #8]
+	ADD R2, R2, R0	   ; pointer to data
+	LDR R3, [R0, #12]  ; length
+copy_out_loop
+	CMP R3, #8
+	BLT copy_out_small
+	
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	SUBS R3, R3, #8
+	BNE copy_out_loop
+	
+	LDR R0, [R0]
+	MOVS R0, R0
+	BNE copy_out_mbuf
+	MOVS PC, LR
+
+copy_out_small
+	LDRB ip, [R2], #1
+	STRB ip, [R1]
+	SUBS R3, R3, #1
+	BNE copy_out_small
+
+	LDR R0, [R0]
+	MOVS R0, R0
+	BNE copy_out_mbuf
+	MOVS PC, LR
+
+; R0 -> mbuf
+; R1 -> data register
+; R2 -> length to copy (mbuf chain must be at least this long)
+     	EXPORT copy_in_mbuf
+copy_in_mbuf ROUT
+	STMFD sp!, {R4, lr}
+next_mbuf_in
+	LDR R3, [R0, #8]
+	ADD R3, R3, R0    ; pointer to data
+	LDR R4, [R0, #20] ; mbuf storage size
+	CMP R4, R2
+	MOVLT R4, R2	  ; length to copy this time
+	STR R4, [R0, #12] ; store length back to mbuf
+	SUB R2, R2, R4
+copy_in_loop
+	CMP R4, #8
+	BLT copy_in_small
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	SUBS R4, R4, #8
+	BNE copy_in_loop
+	MOVS R2, R2
+	LDRNE R0, [R0]
+	BNE next_mbuf_in
+	LDMFD sp!, {R4, pc}^
+	
+copy_in_small
+	LDRB ip, [R1]
+	STRB ip, [R3], #1
+	SUBS R4, R4, #1
+	BNE copy_in_small
+	MOVS R2, R2
+	LDRNE R0, [R0]
+	BNE next_mbuf_in
+	LDMFD sp!, {R4, pc}^
