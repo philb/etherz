@@ -1,0 +1,50 @@
+Build instructions for EtherZ
+-----------------------------
+
+There are several different components to the software which need to be compiled
+in different ways.  Some of the compiled artifacts are included in the git repository
+so it may not be necessary to recompile things that you're not modifying.
+
+1. FPGA code
+
+Get the Lattice iCECube2 tool from their website.  You will need to click through
+the agreement and affirm that you don't work for Mentor Graphics.  Licences are
+zero cost but node-locked to your computer's MAC address.
+
+Open iCECube2 and load etherz_sbt.project.  Click Tools -> Run All and you should
+get a new bitstream.  The MCU build process knows how to ingest this.
+
+2. MCU code
+
+Get the ARM cross-compiler tools from their website:
+
+https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm/downloads
+
+Go to the mcu directory and run "make".  If the FPGA bitstream has changed then
+the makefile will regenerate fpga_image.h.
+
+The output binary etherz_flash.elf is what you need to load into the MCU.  This
+contains both the microcontroller firmware and the FPGA bitstream: the FPGA is
+loaded by the MCU when it boots.
+
+Using OpenOCD and GDB to flash the microcontroller:
+
+# openocd -f sam4s2.cfg
+
+In another window:
+# arm-none-eabi-gdb
+(gdb) target extended-remote localhost:3333
+(gdb) load etherz_flash.elf
+(gdb) monitor reset
+
+3. Relocatable modules
+
+These use Acorn C++ and need to be built under RISC OS (rpcemu works).  Run "amu"
+in each of the rom/EtherZ and rom/IDEWedge directories.
+
+4. Loader and ROM image
+
+The makefile in the "rom" directory assembles the loader (from loader.S) and
+joins it together with the relocatable modules to make rom.bin.  It also
+generates a random Ethernet MAC address.
+
