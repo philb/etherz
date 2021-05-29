@@ -289,7 +289,9 @@ static void finish_ide_command(void)
 		    rbuf[0], rbuf[1], rbuf[2], rbuf[3],
 		    rbuf[4], rbuf[5], rbuf[6], rbuf[7]);
 #else
+#ifdef TRACE
 	uart_printf("\r\n");
+#endif
 #endif
 	pio_enable_interrupt(PIOA, PIO_PA5);
 }
@@ -497,7 +499,9 @@ static void start_ide_command(uint8_t *cmd)
 	if (cmd[1] == 0x30 || cmd[1] == 0x31) {
 		// Write sectors
 		fill_sector_buffer();
+#ifdef TRACE
 		uart_printf("WS %d@%x ", sector_count, sector_address);
+#endif
 		sd_mmc_err_t err;
 		err = sd_mmc_init_write_blocks(0, sector_address, 1);
 		if (err == SD_MMC_OK)
@@ -519,7 +523,9 @@ static void start_ide_command(uint8_t *cmd)
 
 	if (cmd[1] == 0x20) {
 		// Read sectors from the card
+#ifdef TRACE
 		uart_printf("RS %d@%x ", sector_count, sector_address);
+#endif
 		sd_mmc_err_t err;
 		err = sd_mmc_init_read_blocks(0, sector_address, 1);
 		if (err == SD_MMC_OK)
