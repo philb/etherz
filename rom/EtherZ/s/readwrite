@@ -10,7 +10,7 @@ copy_out_mbuf	ROUT
 copy_out_loop
 	CMP R3, #8
 	BLT copy_out_small
-	
+
 	LDRB ip, [R2], #1
 	STRB ip, [R1]
 	LDRB ip, [R2], #1
@@ -30,18 +30,22 @@ copy_out_loop
 	STRB ip, [R1]
 	SUBS R3, R3, #8
 	BNE copy_out_loop
-	
+
 	LDR R0, [R0]
 	MOVS R0, R0
 	BNE copy_out_mbuf
 	MOVS PC, LR
 
 copy_out_small
+	MOVS R3, R3
+	BEQ copy_out_next_mbuf
+copy_out_small_loop
 	LDRB ip, [R2], #1
 	STRB ip, [R1]
 	SUBS R3, R3, #1
 	BNE copy_out_small
 
+copy_out_next_mbuf
 	LDR R0, [R0]
 	MOVS R0, R0
 	BNE copy_out_mbuf
@@ -56,7 +60,7 @@ copy_in_mbuf ROUT
 next_mbuf_in
 	LDR R3, [R0, #8]
 	ADD R3, R3, R0    ; pointer to data
-	LDR R4, [R0, #20] ; mbuf storage size
+	LDR R4, [R0, #12] ; mbuf storage size
 	CMP R4, R2
 	MOVLT R4, R2	  ; length to copy this time
 	STR R4, [R0, #12] ; store length back to mbuf
@@ -87,7 +91,7 @@ copy_in_loop
 	LDRNE R0, [R0]
 	BNE next_mbuf_in
 	LDMFD sp!, {R4, pc}^
-	
+
 copy_in_small
 	LDRB ip, [R1]
 	STRB ip, [R3], #1
@@ -97,3 +101,4 @@ copy_in_small
 	LDRNE R0, [R0]
 	BNE next_mbuf_in
 	LDMFD sp!, {R4, pc}^
+	END
