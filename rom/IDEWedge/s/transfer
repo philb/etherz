@@ -4,6 +4,14 @@ DATA_LO * 0x2400
 DATA_HI * 0x2800
 
 	MACRO
+	ReadWord
+	ldrb r3, [r10, #DATA_LO - DATA_LO]
+	strb r3, [r1], #1
+	ldrb r3, [r10, #DATA_HI - DATA_LO]
+	strb r3, [r1], #1
+	MEND
+
+	MACRO
 	Read2Words
 	ldrb r3, [r10, #DATA_LO - DATA_LO]
 	ldrb r4, [r10, #DATA_HI - DATA_LO]
@@ -59,7 +67,11 @@ IDEReadSector
 	teq r0, #0x200
 	bne SlowIDERead
 
-	; We are reading exactly one sector
+	movs r3, r1, lsl #31
+	bne ReadSectorAligned8
+	bcs ReadSectorAligned16
+
+	; We are reading exactly one sector and the buffer is 32-bit aligned
 SectorReadLoop
 	Read2Words
 	Read2Words
@@ -74,17 +86,50 @@ SectorReadLoop
 	bne SectorReadLoop
 	ldmfd sp!, {r3, r4, r10, pc}^
 
+	; Reading 1 sector but buffer is only 8-bit aligned
+ReadSectorAligned8
+	; Reading 1 sector but buffer is only 16-bit aligned
+ReadSectorAligned16
+	; Treat these two cases the same
+	ReadWord
+	ReadWord
+	ReadWord
+	ReadWord
+
+	ReadWord
+	ReadWord
+	ReadWord
+	ReadWord
+
+	ReadWord
+	ReadWord
+	ReadWord
+	ReadWord
+
+	ReadWord
+	ReadWord
+	ReadWord
+	ReadWord
+	subs r0, r0, #32
+	bne ReadSectorAligned16
+	ldmfd sp!, {r3, r4, r10, pc}^
+
 	; Reading less than a whole sector
 	; Transfer size is guaranteed >0 and <512
-	; NOT guaranteed to be a whole number of words
+	; NOT guaranteed to be a whole number of words and no guaranteed alignment
 	; May be writing into application space so we must not overrun the output buffer
 SlowIDERead
 	cmp r0, #16	; at least 16 bytes to move?
 	blt ReadLT16
-	Read2Words
-	Read2Words
-	Read2Words
-	Read2Words
+	ReadWord
+	ReadWord
+	ReadWord
+	ReadWord
+
+	ReadWord
+	ReadWord
+	ReadWord
+	ReadWord
 	subs r0, r0, #16
 	bne SlowIDERead
 	ldmfd sp!, {r3, r4, r10, pc}^
@@ -116,62 +161,102 @@ ReadLT16		; 1-15 bytes to move
 ;    IRQ state preserved but IRQs are enabled during call.
 	EXPORT IDEWriteSector
 IDEWriteSector
-	stmfd sp!, {r2-r10, r14}
-	[ 0=1
-	ldr r10, [r11]
-	|
-	ldr r10, =0x3344000
-	]
-	add r10, r10, #DATA_LO
-	[ 0=1
-	ands r2, r0, #0xf
-	beq aligned_write
-	bic r2, r2, #1
-	eor r2, r2, #14
-	add pc, pc, r2, lsl #3
-	nop
-	nop
+	stmfd sp!, {r3, r4, r5, r10, r14}
+	ldr r10, =0x3344000 + DATA_LO
+	teq r0, #0x200
+	bne SlowIDEWrite
 
-	WriteWord
-	WriteWord
-	WriteWord
-	WriteWord
+	movs r3, r1, lsl #31
+	bne WriteSectorAligned8
+	bcs WriteSectorAligned16
 
-	WriteWord
-	WriteWord
-	WriteWord
-	WriteWord
-
-	WriteWord
-	WriteWord
-	WriteWord
-	WriteWord
-
-	WriteWord
-	WriteWord
-	WriteWord
-aligned_write
-	bics r0, r0, #0xf
-	ldmeqfd sp!, {r2-r10, pc}^
-
-write_loop
+	; Writing exactly one sector and buffer is 32-bit aligned
+SectorWriteLoop
 	Write2Words
 	Write2Words
 	Write2Words
 	Write2Words
 
-	subs r0, r0, #16
-	bne write_loop
-	ldmfd sp!, {r2-r10, pc}^
-	|
-	cmp r0, #512
-	movlt r0, #512
-write_loop
+	Write2Words
+	Write2Words
+	Write2Words
+	Write2Words
+
+	subs r0, r0, #32
+	bne SectorWriteLoop
+	ldmfd sp!, {r3, r4, r5, r10, pc}^
+
+WriteSectorAligned8
+WriteSectorAligned16
+	WriteWord
+	WriteWord
+	WriteWord
+	WriteWord
+
+	WriteWord
+	WriteWord
+	WriteWord
+	WriteWord
+
+	WriteWord
+	WriteWord
+	WriteWord
+	WriteWord
+
+	WriteWord
+	WriteWord
+	WriteWord
+	WriteWord
+	subs r0, r0, #32
+	bne WriteSectorAligned16
+	ldmfd sp!, {r3, r4, r5, r10, pc}^
+
+SlowIDEWrite
+	; calculate number of bytes of zero-padding needed after valid sector data
+	mov r5, #512
+	sub r5, r5, r0
+	bic r5, r5, #1
+
+Write16
+	cmp r0, #16
+	blt WriteLT16
+
+	WriteWord
+	WriteWord
+	WriteWord
+	WriteWord
+
+	WriteWord
+	WriteWord
+	WriteWord
+	WriteWord
+	subs r0, r0, #2
+	bne Write16
+
+WritePadding
+	mov r3, #0
+WritePadLoop
+	strb r3, [r10, #DATA_HI - DATA_LO]
+	strb r3, [r10, #DATA_LO - DATA_LO]
+	subs r5, r5, #2
+	bne WritePadLoop
+	ldmfd sp!, {r3, r4, r5, r10, pc}^
+
+WriteLT16
 	cmp r0, #2
-	ldmltfd sp!, {r2-r10, pc}^
+	bne WriteLast
+WriteLoop16
 	WriteWord
-	sub r0, r0, #2
-	b write_loop
-	]
+	subs r0, r0, #2
+	beq WritePadding
+	cmp r0, #2
+	bge WriteLoop16
+
+WriteLast
+	mov r3, #0
+	strb r3, [r10, #DATA_HI - DATA_LO]
+	ldrb r3, [r1], #1
+	strb r3, [r10, #DATA_LO - DATA_LO]
+	b WritePadding
 
 	END
