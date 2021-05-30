@@ -68,6 +68,7 @@ struct card
 	bool tx_busy;
 	void *irq_mask;
 	void *priv;
+	bool irqs_on;
 
 	struct stats stats;
 
@@ -75,6 +76,7 @@ struct card
 	{
 		int irqs;
 		int tx_release_frames;
+		int tx_queued_frames;
 		int speed;
 		bool mdix;
 	} ext_stats;
@@ -89,12 +91,14 @@ static struct card card;
 
 static void card_irq_on(struct card *c)
 {
+	c->irqs_on = true;
 	*((volatile uint8_t *)c->irq_mask) |= ETH_IRQ_BIT;
 }
 
 static void card_irq_off(struct card *c)
 {
 	*((volatile uint8_t *)c->irq_mask) &= ~ETH_IRQ_BIT;
+	c->irqs_on = false;
 }
 
 static void *rma_alloc(size_t size)
@@ -233,6 +237,8 @@ static void close_mbufmanager(struct card *c)
 void interrupt_handler(_kernel_swi_regs *r, void *pw)
 {
 	struct card *c = &card;
+	if (!c->irqs_on)
+		return;
 	c->ext_stats.irqs++;
 	card_irq_off(c);
 	_kernel_irqs_on();
@@ -540,7 +546,10 @@ static _kernel_oserror *do_transmit(struct card *c, _kernel_swi_regs *r)
 	   is safe because the only impact of the race is that we may ensure_safe when
 	   we didn't really need to. */
 	if (c->tx_busy)
+	{
+		c->ext_stats.tx_queued_frames++;
 		mb = c->mb.ctl.ensure_safe(&c->mb.ctl, mb);
+	}
 
 	hdr->m_next = mb;
 
@@ -906,7 +915,7 @@ _kernel_oserror *cmd(char *arg_string, int argc, int cmd_no, void *priv)
 			r.r[0] = (int)buf;
 			err = _kernel_swi(XOS_Bit | OS_Write0, &r, &r);
 			if (err) return err;
-			sprintf(buf, "Transmit frames %ld released %d\r\n", c->stats.st_tx_frames, c->ext_stats.tx_release_frames);
+			sprintf(buf, "Transmit frames %ld released %d queued %d\r\n", c->stats.st_tx_frames, c->ext_stats.tx_release_frames, c->ext_stats.tx_queued_frames);
 			r.r[0] = (int)buf;
 			err = _kernel_swi(XOS_Bit | OS_Write0, &r, &r);
 			if (err) return err;
