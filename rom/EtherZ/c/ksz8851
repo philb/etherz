@@ -91,8 +91,8 @@
 #define RXFDPR_VAL	(RXFDPR_RXFPAI)
 #define RXCR2_VAL	(RXCR2_IUFFP | RXCR2_RXIUFCEZ | RXCR2_UDPLFE)
 
-extern void copy_out_mbuf(struct mbuf *, char *);
-extern void copy_in_mbuf(struct mbuf *, char *, size_t length);
+extern void copy_out_mbuf(struct mbuf *, volatile char *);
+extern void copy_in_mbuf(struct mbuf *, volatile char *, size_t length);
 
 void ksz8851_write_reg16(struct ksz8851 *dev, uint8_t addr, uint16_t val)
 {
@@ -193,7 +193,7 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			struct mbuf *mb;
 			uint8_t *p;
 			RxHdr *rxh;
-			size_t this_mbuf;
+			int len;
 
 			if (!hmb)
 			{
@@ -208,12 +208,12 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			hmb->m_type = MT_HEADER;
 			hmb->m_list = NULL;
 			ksz8851_enable_dma(dev);
-			/* Throw away four useless bytes */
+			/* Throw away three useless bytes */
 			(void)GET_DATA(dev);
 			(void)GET_DATA(dev);
 			(void)GET_DATA(dev);
-			(void)GET_DATA(dev);
-			(void)GET_DATA(dev);
+			len = GET_DATA(dev);
+			len |= (GET_DATA(dev) << 8);
 			/* Destination hwaddr */
 			p = &rxh->rx_dst_addr[0];
 			for (i = 0; i < 6; i++)
@@ -225,18 +225,21 @@ static void ksz8851_unload_rx(struct ksz8851 *dev)
 			rxh->rx_frame_type = (GET_DATA(dev) << 8);
 			rxh->rx_frame_type |= GET_DATA(dev);
 			length -= (14 + 4);
-			mb = etherz_alloc_mbuf(length);
-			if (!mb)
+			if (length)
 			{
-				etherz_free_mbuf(hmb);
-				etherz_frame_dropped();
-				ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);
-				continue;
+				mb = etherz_alloc_mbuf(length);
+				if (!mb)
+				{
+					etherz_free_mbuf(hmb);
+					etherz_frame_dropped();
+					ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);
+					continue;
+				}
+				mb->m_type = MT_DATA;
+				mb->m_list = NULL;
+				hmb->m_next = mb;
+				copy_in_mbuf(mb, dev->base + DATA, length);
 			}
-			mb->m_type = MT_DATA;
-			mb->m_list = NULL;
-			hmb->m_next = mb;
-			copy_in_mbuf(mb, dev->base + DATA, length);
 			ksz8851_write_reg16(dev, RXQCR, RXQCR_VAL | 0x1);  /* dma mode off */
 			etherz_receive_frame(hmb);
 		}
