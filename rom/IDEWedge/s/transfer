@@ -62,6 +62,7 @@ DATA_HI * 0x2800
 	EXPORT IDEReadSector
 IDEReadSector
 	stmfd sp!, {r3, r4, r10, r14}
+	teqp pc, #3		; SVC mode, irqs on
 	ldr r10, =0x3344000 + DATA_LO
 
 	teq r0, #0x200
@@ -162,6 +163,7 @@ ReadLT16		; 1-15 bytes to move
 	EXPORT IDEWriteSector
 IDEWriteSector
 	stmfd sp!, {r3, r4, r5, r10, r14}
+	teqp pc, #3		; SVC mode, irqs on
 	ldr r10, =0x3344000 + DATA_LO
 	teq r0, #0x200
 	bne SlowIDEWrite
