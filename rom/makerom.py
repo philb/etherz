@@ -103,6 +103,7 @@ def WriteChunkDirectoryAt(start, chunks):
 def MakeEthernetID():
     ba = bytearray(random.randbytes(6))
     ba[0] |= 0x2
+    ba[0] &= ~0x1
     return "%02x:%02x:%02x:%02x:%02x:%02x" % (ba[0], ba[1], ba[2], ba[3], ba[4], ba[5])
 
 # first chunk directory in podule space
